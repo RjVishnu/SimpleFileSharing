@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" data-base="__BASE__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>File Server</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <button id="btn-sidebar" class="icon-btn" title="Toggle folders" data-icon="menu"></button>
+  <a class="brand" href="#/"><span class="logo" data-icon="folder"></span><span id="root-name" data-brand-name>Files</span></a>
+  <label class="search">
+    <span data-icon="search"></span>
+    <input id="search" type="search" placeholder="Search files and folders…" autocomplete="off">
+  </label>
+  <div class="top-actions">
+    <button id="btn-folders" class="icon-btn" title="Choose shared folders" data-icon="settings" hidden></button>
+    <button id="btn-details" class="icon-btn" title="Details panel (I)" data-icon="info"></button>
+    <button id="btn-shares" class="icon-btn" title="Manage share links" data-icon="link" hidden></button>
+    <button id="btn-theme" class="icon-btn" title="Toggle dark mode" data-icon="moon"></button>
+    <button id="btn-logout" class="icon-btn" title="Log out" data-icon="logout" hidden></button>
+  </div>
+</header>
+
+<div class="shell">
+  <aside id="sidebar" class="sidebar" aria-label="Folders"><div id="tree" class="tree"></div></aside>
+  <div id="scrim" class="scrim" hidden></div>
+
+  <main>
+    <div class="page-head">
+      <nav id="crumbs" class="crumbs" aria-label="Breadcrumb"></nav>
+      <div class="head-actions">
+        <button id="btn-mkdir" class="btn" data-icon="folderplus" hidden>New folder</button>
+        <button id="btn-upload" class="btn primary" data-icon="upload" hidden>Upload</button>
+        <input id="file-input" type="file" multiple hidden>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <label class="select-all"><input type="checkbox" id="select-all"><span id="sel-count">Select all</span></label>
+      <span id="summary" class="summary"></span>
+      <div class="tools-right">
+        <select id="sort" title="Sort by">
+          <option value="name">Name</option>
+          <option value="modified">Modified</option>
+          <option value="size">Size</option>
+        </select>
+        <button id="btn-order" class="icon-btn bordered" title="Sort order" data-icon="up"></button>
+        <div class="segmented">
+          <button id="btn-list" class="icon-btn" title="List view" data-icon="list"></button>
+          <button id="btn-grid" class="icon-btn" title="Grid view" data-icon="grid"></button>
+          <button id="btn-gallery" class="icon-btn" title="Gallery view" data-icon="gallery"></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="progress" class="progress" hidden><div id="progress-bar"></div><span id="progress-text"></span></div>
+    <div id="status" class="status"></div>
+    <div id="list" class="list"></div>
+  </main>
+
+  <aside id="details" class="details" aria-label="Details" hidden></aside>
+</div>
+
+<div id="selbar" class="selbar" hidden>
+  <span id="selbar-count"></span>
+  <button id="btn-zip" class="btn" data-icon="download">Download ZIP</button>
+  <button id="btn-share" class="btn" data-icon="link" hidden>Share</button>
+  <button id="btn-rename" class="btn" data-icon="edit" hidden>Rename</button>
+  <button id="btn-delete" class="btn danger" data-icon="trash" hidden>Delete</button>
+  <button id="btn-clear" class="icon-btn" title="Clear selection" data-icon="x"></button>
+</div>
+
+<div id="ctx" class="ctx" hidden></div>
+<div id="drop" class="drop" hidden><div>Drop files to upload</div></div>
+
+<div id="preview" class="modal" hidden>
+  <div class="preview-bar">
+    <span id="pv-title"></span>
+    <span class="pv-tools">
+      <button id="pv-play" class="icon-btn" title="Slideshow (Space)" data-icon="play"></button>
+      <button id="pv-zoom-out" class="icon-btn" title="Zoom out" data-icon="minus"></button>
+      <button id="pv-zoom-reset" class="icon-btn" title="Reset zoom">1:1</button>
+      <button id="pv-zoom-in" class="icon-btn" title="Zoom in" data-icon="plus"></button>
+      <a id="pv-download" class="icon-btn" title="Download" data-icon="download"></a>
+      <button id="pv-close" class="icon-btn" title="Close (Esc)" data-icon="x"></button>
+    </span>
+  </div>
+  <button id="pv-prev" class="nav prev" title="Previous (←)" data-icon="chevleft"></button>
+  <div id="pv-body" class="pv-body"></div>
+  <button id="pv-next" class="nav next" title="Next (→)" data-icon="chevright"></button>
+</div>
+
+<div id="dialog" class="modal dialog-wrap" hidden><div id="dialog-box" class="dialog"></div></div>
+<div id="toasts" class="toasts"></div>
+<script src="/brand.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

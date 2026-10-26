@@ -1,0 +1,24 @@
+{
+  "name": "File Server",
+  "version": "2.0.0",
+  "description": "Advanced File Server with Preview and Navigation",
+  "author": "Your Name",
+  "main": "server.js",
+  "icon": "./assets/icon.ico",
+  "build": {
+    "target": "win32-x64",
+    "outputPath": "./dist",
+    "compress": true,
+    "bundleNodeModules": true
+  },
+  "server": {
+    "defaultPort": 5001,
+    "defaultHost": "auto",
+    "defaultDirectory": "./shared-files"
+  },
+  "ui": {
+    "showConsole": true,
+    "autoStart": true,
+    "systemTray": true
+  }
+}
