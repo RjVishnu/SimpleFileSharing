@@ -5,8 +5,9 @@ const os = require('os');
 const path = require('path');
 const { load } = require('../src/config');
 const { createApp } = require('../src/app');
+const { findNetworkIP } = require('../src/lib/network');
 
-async function run(env, fn) {
+async function run(env, fn, host = '127.0.0.1') {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-root-'));
     const data = fs.mkdtempSync(path.join(os.tmpdir(), 'sc-data-'));
     fs.mkdirSync(path.join(root, 'docs'));
@@ -14,10 +15,10 @@ async function run(env, fn) {
     fs.writeFileSync(path.join(root, 'docs', 'note.md'), '# note');
     fs.writeFileSync(path.join(root, '.secret'), 'x');
     const cfg = load([], { SHARE_ROOT: root, DATA_DIR: data, PORT: '0', ...env });
-    const server = createApp(cfg).listen(0, '127.0.0.1');
+    const server = createApp(cfg).listen(0, host === '127.0.0.1' ? host : '0.0.0.0');
     await new Promise((r) => server.once('listening', r));
     cfg.port = server.address().port;
-    const url = `http://127.0.0.1:${cfg.port}`;
+    const url = `http://${host}:${cfg.port}`;
     try { await fn({ url, root, cfg }); } finally { server.close(); }
 }
 
@@ -146,6 +147,55 @@ const post = (url, body, headers = {}) =>
         const dirs = await json(await fetch(`${url}/api/host/dirs?path=${encodeURIComponent(os.tmpdir())}`));
         assert(Array.isArray(dirs.dirs) && dirs.dirs.length > 0);
     });
+
+    // Password: cookie integrity, logout, folder management, brute-force limit
+    await run({ SHARE_PASSWORD: 'pw123' }, async ({ url }) => {
+        const login = await post(`${url}/login`, { password: 'pw123' });
+        const cookie = login.headers.get('set-cookie').split(';')[0];
+        const [expires, sig] = cookie.slice('sid='.length).split('.');
+        const status = (c) => fetch(`${url}/api/list`, { headers: { Cookie: c } }).then((r) => r.status);
+
+        assert.strictEqual(await status(cookie), 200);
+        assert.strictEqual(await status(`sid=${expires}.${sig.slice(0, -2)}xx`), 401); // tampered signature
+        assert.strictEqual(await status(`sid=${Number(expires) + 1000}.${sig}`), 401); // forged expiry
+        assert.strictEqual(await status(`sid=${Date.now() - 1000}.${sig}`), 401); // expired
+        assert.strictEqual(await status('sid=garbage'), 401);
+
+        const h = { Cookie: cookie };
+        assert.strictEqual((await json(await fetch(`${url}/api/me`, { headers: h }))).canManage, true);
+        assert.strictEqual((await fetch(`${url}/api/folders`)).status, 401); // no cookie
+        assert.strictEqual((await fetch(`${url}/api/folders`, { headers: h })).status, 200);
+        assert.strictEqual((await fetch(`${url}/api/host/dirs`)).status, 401);
+
+        const out = await post(`${url}/logout`, {}, h);
+        assert.strictEqual(out.status, 200);
+        assert.match(out.headers.get('set-cookie'), /sid=;/);
+
+        // 10 wrong attempts lock out the IP, even for the right password
+        for (let i = 0; i < 10; i++) assert.strictEqual((await post(`${url}/login`, { password: 'bad' })).status, 401);
+        assert.strictEqual((await post(`${url}/login`, { password: 'bad' })).status, 429);
+        assert.strictEqual((await post(`${url}/login`, { password: 'pw123' })).status, 429);
+    });
+
+    // Folder management from a non-loopback address: blocked unless a password or ALLOW_SETTINGS
+    const lan = findNetworkIP();
+    if (!lan) {
+        console.log('skipped non-loopback gating tests (no network interface)');
+    } else {
+        await run({}, async ({ url }) => {
+            const me = await json(await fetch(`${url}/api/me`));
+            assert.strictEqual(me.canManage, false);
+            assert.strictEqual((await fetch(`${url}/api/folders`)).status, 403);
+            assert.strictEqual((await post(`${url}/api/folders`, { path: os.tmpdir() })).status, 403);
+            assert.strictEqual((await fetch(`${url}/api/host/dirs`)).status, 403);
+            assert.strictEqual((await fetch(`${url}/api/list?path=`)).status, 200); // browsing still works
+        }, lan);
+
+        await run({ ALLOW_SETTINGS: 'true' }, async ({ url }) => {
+            assert.strictEqual((await json(await fetch(`${url}/api/me`))).canManage, true);
+            assert.strictEqual((await fetch(`${url}/api/folders`)).status, 200);
+        }, lan);
+    }
 
     console.log('All smoke tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });
