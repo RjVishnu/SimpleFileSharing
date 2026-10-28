@@ -6,50 +6,7 @@ const path = require('path');
 
 console.log('🚀 Building File Server Executable...\n');
 
-// Read app configuration
-const appConfig = JSON.parse(fs.readFileSync('app-config.json', 'utf8'));
-
-// Create package.json for pkg if it doesn't exist or update it
-const packageJson = {
-  "name": "file-server-app",
-  "version": appConfig.version,
-  "description": appConfig.description,
-  "main": "server.js",
-  "bin": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "build": "node build.js",
-    "build-exe": "pkg . --target win32-x64 --output ./dist/FileServer.exe"
-  },
-  "pkg": {
-    "scripts": [
-      "server.js"
-    ],
-    "assets": [
-      "config.js",
-      "app-config.json"
-    ],
-    "targets": [
-      "node18-win32-x64"
-    ],
-    "outputPath": "./dist"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
-  },
-  "devDependencies": {
-    "pkg": "^5.8.1"
-  },
-  "engines": {
-    "node": ">=14.0.0"
-  },
-  "author": appConfig.author,
-  "license": "MIT"
-};
-
-// Write updated package.json
-fs.writeFileSync('package.json', JSON.stringify(packageJson, null, 2));
-console.log('✅ Updated package.json for executable build');
+// package.json already holds the pkg config (scripts, assets, targets); do not regenerate it.
 
 // Install pkg if not installed
 try {
