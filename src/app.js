@@ -13,6 +13,12 @@ const { createFoldersRouter } = require('./routes/folders');
 const { SettingsStore } = require('./services/settingsStore');
 const { createScope } = require('./lib/scope');
 const { isInside, HttpError } = require('./lib/paths');
+const { isLocalClient } = require('./lib/network');
+
+// A reverse proxy or tunnel on this machine makes internet visitors look like 127.0.0.1.
+// Any forwarding header means the request did not originate here.
+const forwarded = (req) => Boolean(req.headers['x-forwarded-for'] || req.headers.forwarded || req.headers['x-real-ip']);
+const clientIsLocal = (req) => !forwarded(req) && isLocalClient(req.ip);
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -51,7 +57,7 @@ function createApp(cfg) {
     scoped.use(createManageRouter());
 
     // Changing which folders are shared needs a password, ALLOW_SETTINGS=true, or access from this computer.
-    const isLoopback = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip);
+    const isLoopback = (req) => !forwarded(req) && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip);
 
     // Admin
     app.get('/', auth.requireAuth, renderIndex(''));
@@ -75,6 +81,8 @@ function createApp(cfg) {
             multiRoot: !req.scope.flat,
             hasPassword: Boolean(cfg.password),
             rootName: req.scope.flat ? req.scope.mounts[0].name : 'Shared folders',
+            local: clientIsLocal(req),
+            hasPublicUrl: Boolean(cfg.publicUrl),
         })
     );
     admin.use(createFoldersRouter(settings));
@@ -98,7 +106,7 @@ function createApp(cfg) {
         next();
     });
     share.get('/api/me', (req, res) =>
-        res.json({ mode: 'share', canUpload: false, canModify: false, canShare: false, rootName: 'Shared' })
+        res.json({ mode: 'share', canUpload: false, canModify: false, canShare: false, rootName: 'Shared', local: clientIsLocal(req) })
     );
     share.use('/api', scoped);
     share.get('/', (req, res) => renderIndex(`/s/${req.params.token}`)(req, res));

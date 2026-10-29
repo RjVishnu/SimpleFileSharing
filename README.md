@@ -29,6 +29,13 @@ Click the ⚙ button in the top bar to add or remove shared folders, rename them
 
 Removing a folder only stops sharing it (files stay on disk) and its share links stop working. Because this lets a visitor expose any folder on the host, the ⚙ button is only available when a password is set, when you open the site from the same computer, or when `ALLOW_SETTINGS=true`.
 
+## Same network first, internet only if needed
+
+- The server is on your network, so two people on the same Wi-Fi/LAN exchange files directly through it: nothing leaves the building and no internet data is used. Share links are always built from the server's LAN address (virtual adapters such as WSL, Docker and VirtualBox are skipped) and come with a QR code.
+- The top bar shows whether you are connected from the **Local network** or over the **Internet**.
+- To also reach people outside the network, expose the server yourself (router port-forward, reverse proxy, or a tunnel) and set `PUBLIC_URL`. Share dialogs then show a second, clearly labelled "Over the internet" link.
+- If a reverse proxy or tunnel runs on the same machine as the server, make it send `X-Forwarded-For` (most do). Requests carrying forwarding headers are never treated as "from this computer", so internet visitors cannot manage folders. Set a password before exposing the server to the internet; traffic is plain HTTP unless the proxy adds HTTPS.
+
 ## Configuration
 
 CLI flags override environment variables, which override `config.js`.
@@ -44,6 +51,7 @@ CLI flags override environment variables, which override `config.js`.
 | Blocked upload types | `BLOCKED_EXT` | `.exe,.bat,.cmd,.com,.msi,.scr,.ps1,.vbs,.dll` |
 | Max items per ZIP | `MAX_ZIP_FILES` | `500` |
 | Branding | `--brand-name`, `--brand-color`, `--brand-logo` / `BRAND_NAME`, `BRAND_COLOR` (`#rrggbb`), `BRAND_LOGO` (image path) | none |
+| Internet address | `--public-url` / `PUBLIC_URL` (e.g. `https://files.example.com`) | none |
 | Share-link storage | `DATA_DIR` | `./data` |
 
 ## Security notes

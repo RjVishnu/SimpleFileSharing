@@ -590,10 +590,18 @@ function shareDialog(target) {
     const create = btn('Create link', async () => {
         try {
             const share = await (await post('/shares', { path: p, expiresInMinutes: Number(expiry.value) })).json();
-            const url = h('input', { type: 'text', value: share.url, readonly: true });
+            const linkRow = (value) => h('div', { class: 'field' },
+                h('input', { type: 'text', value, readonly: true }),
+                btn('Copy', () => copyText(value).then(() => toast('Link copied'))));
             result.replaceChildren(
-                h('div', { class: 'field' }, url, btn('Copy', () => copyText(share.url).then(() => toast('Link copied')))),
-                h('img', { class: 'qr', alt: 'QR code', src: `${BASE}/api/qr?text=${q(share.url)}` }));
+                h('div', { class: 'link-label' }, 'On this network'),
+                linkRow(share.url),
+                h('p', { class: 'net-note' }, 'For anyone on the same Wi-Fi or LAN. The file goes straight from this computer, using no internet data.'),
+                h('img', { class: 'qr', alt: 'QR code', src: `${BASE}/api/qr?text=${q(share.url)}` }),
+                share.internetUrl ? h('div', {},
+                    h('div', { class: 'link-label' }, 'Over the internet'),
+                    linkRow(share.internetUrl),
+                    h('p', { class: 'net-note' }, 'For people outside your network. The file travels over the internet.')) : null);
             create.remove();
         } catch (error) { toast(error.message, true); }
     }, 'primary');
@@ -607,6 +615,7 @@ async function sharesManager() {
         const body = shares.length ? h('div', {}, ...shares.map((s) => h('div', { class: 'share-item' },
             h('div', {}, `${s.type === 'folder' ? '📁' : '📄'} /${s.path}`),
             h('a', { class: 'link', href: s.url, target: '_blank', rel: 'noopener' }, s.url),
+            s.internetUrl ? h('a', { class: 'link', href: s.internetUrl, target: '_blank', rel: 'noopener' }, s.internetUrl) : null,
             h('div', {}, `${s.downloads} download(s) · ${s.expiresAt ? 'expires ' + formatDate(s.expiresAt) : 'never expires'} `,
                 btn('Copy', () => copyText(s.url).then(() => toast('Link copied'))),
                 ' ', btn('Revoke', async () => { await api(`/shares/${s.token}`, { method: 'DELETE' }); sharesManager(); }, 'danger')))))
@@ -820,6 +829,12 @@ async function init() {
     $('btn-shares').hidden = !m.canShare;
     $('btn-folders').hidden = !m.canManage;
     $('btn-logout').hidden = !m.hasPassword;
+    const badge = $('net-badge');
+    badge.hidden = false;
+    badge.className = 'net-badge ' + (m.local ? 'local' : 'internet');
+    badge.textContent = m.local ? 'Local network' : 'Internet';
+    badge.title = m.local ? 'You are on the same network as the server: transfers stay local and use no internet data'
+        : 'You are connected over the internet: transfers use internet data';
     document.title = m.mode === 'share' ? 'Shared files' : (state.brand.name || `${m.rootName} – File Server`);
     setPanels();
     if (m.hasPassword) {

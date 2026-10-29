@@ -26,6 +26,20 @@ function loadBrand(args, env) {
     };
 }
 
+// Optional address people outside the network use (port-forward, reverse proxy or tunnel). Must be http(s).
+function loadPublicUrl(args, env) {
+    const raw = String(args['public-url'] || env.PUBLIC_URL || '').trim();
+    if (!raw) return '';
+    try {
+        const url = new URL(raw);
+        if (!/^https?:$/.test(url.protocol)) throw new Error('not http(s)');
+        return url.origin + url.pathname.replace(/\/+$/, '');
+    } catch {
+        console.warn(`Ignoring invalid PUBLIC_URL "${raw}" (expected e.g. https://files.example.com)`);
+        return '';
+    }
+}
+
 function load(argv = process.argv.slice(2), env = process.env) {
     const args = parseArgs(argv);
 
@@ -55,6 +69,7 @@ function load(argv = process.argv.slice(2), env = process.env) {
             .map((e) => e.trim().toLowerCase())
             .filter(Boolean),
         brand: loadBrand(args, env),
+        publicUrl: loadPublicUrl(args, env),
         maxZipFiles: Number(env.MAX_ZIP_FILES || 500),
         dataDir: path.resolve(env.DATA_DIR || path.join(process.cwd(), 'data')),
     };

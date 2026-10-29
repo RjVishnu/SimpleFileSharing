@@ -6,7 +6,8 @@ const cfg = load();
 const server = createApp(cfg).listen(cfg.port, cfg.host, () => {
     console.log(`🚀 File Server running`);
     console.log(`   Local:   http://localhost:${cfg.port}`);
-    console.log(`   Network: http://${findNetworkIP()}:${cfg.port}`);
+    console.log(`   Network: http://${findNetworkIP()}:${cfg.port}   (same Wi-Fi / LAN: no internet data used)`);
+    if (cfg.publicUrl) console.log(`   Internet: ${cfg.publicUrl}`);
     console.log(`📁 Serving: ${cfg.root}`);
     console.log(
         `🔒 Password: ${cfg.password ? 'on' : 'off'} | upload: ${cfg.allowUpload ? 'on' : 'off'} | ` +

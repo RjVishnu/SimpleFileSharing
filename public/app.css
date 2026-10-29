@@ -185,6 +185,14 @@ input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); c
 .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .dialog .field { margin: 10px 0; display: flex; gap: 8px; align-items: center; }
 .dialog .qr { display: block; width: 190px; height: 190px; margin: 14px auto 0; background: #fff; border-radius: 12px; padding: 8px; }
+.net-badge { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; margin-right: 6px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: default; }
+.net-badge::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.net-badge.local { color: #16794a; background: #e2f6ec; }
+.net-badge.internet { color: #9a5b00; background: #fff1d6; }
+[data-theme="dark"] .net-badge.local { color: #6ee0a6; background: #12382a; }
+[data-theme="dark"] .net-badge.internet { color: #ffcc66; background: #3d2e0b; }
+.dialog .net-note { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+.dialog .link-label { font-weight: 600; margin-top: 14px; }
 .share-item { padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 13px; display: grid; gap: 4px; }
 .share-item:last-child { border-bottom: 0; }
 .share-item .link { color: var(--accent); word-break: break-all; }
@@ -213,6 +221,7 @@ input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); c
   .pv-body { padding: 0 8px 16px; }
   .list.grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   .select-all { white-space: nowrap; }
+  .net-badge { font-size: 0; gap: 0; padding: 0; width: 10px; height: 10px; margin-right: 8px; background: none !important; }
   .toolbar { gap: 8px; flex-wrap: wrap; }
   .tools-right { gap: 6px; }
   .tools-right select { max-width: 92px; }

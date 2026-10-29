@@ -197,5 +197,41 @@ const post = (url, body, headers = {}) =>
         }, lan);
     }
 
+    // LAN-first links, locality flag, PUBLIC_URL, and reverse-proxy safety
+    {
+        const { isLocalClient, lanAddresses } = require('../src/lib/network');
+        for (const ip of ['127.0.0.1', '::1', '::ffff:192.168.1.5', '10.1.2.3', '172.16.0.9', '172.31.255.1', '192.168.0.1', 'fd12::1', 'fe80::1'])
+            assert.strictEqual(isLocalClient(ip), true, ip);
+        for (const ip of ['8.8.8.8', '172.32.0.1', '172.15.0.1', '1.1.1.1', '2001:4860::1', '', 'garbage'])
+            assert.strictEqual(isLocalClient(ip), false, ip);
+        assert(lanAddresses().every((a) => !a.address.startsWith('169.254.')));
+
+        await run({ PUBLIC_URL: 'https://files.example.com/' }, async ({ url, cfg }) => {
+            assert.strictEqual(cfg.publicUrl, 'https://files.example.com');
+            const me = await json(await fetch(`${url}/api/me`));
+            assert.strictEqual(me.local, true);
+            assert.strictEqual(me.hasPublicUrl, true);
+
+            const share = await json(await post(`${url}/api/shares`, { path: 'hello.txt' }));
+            assert.strictEqual(share.internetUrl, `https://files.example.com/s/${share.token}`);
+            assert(!share.url.includes('example.com') && !share.url.includes('localhost')); // LAN address, not the public one
+            assert.strictEqual((await json(await fetch(`${url}/s/${share.token}/api/me`))).local, true);
+
+            // Behind a reverse proxy on this machine every visitor looks like 127.0.0.1: don't trust that
+            const viaProxy = { 'X-Forwarded-For': '203.0.113.7' };
+            const meProxy = await json(await fetch(`${url}/api/me`, { headers: viaProxy }));
+            assert.strictEqual(meProxy.local, false);
+            assert.strictEqual(meProxy.canManage, false); // must not get folder management
+            assert.strictEqual((await fetch(`${url}/api/folders`, { headers: viaProxy })).status, 403);
+            assert.strictEqual((await post(`${url}/api/folders`, { path: os.tmpdir() }, viaProxy)).status, 403);
+        });
+
+        await run({ PUBLIC_URL: 'ftp://nope' }, async ({ url, cfg }) => {
+            assert.strictEqual(cfg.publicUrl, '');
+            const share = await json(await post(`${url}/api/shares`, { path: 'hello.txt' }));
+            assert.strictEqual(share.internetUrl, null);
+        });
+    }
+
     console.log('All smoke tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -8,14 +8,20 @@ const { findNetworkIP } = require('../lib/network');
 function createSharesRouter(cfg, shares) {
     const router = express.Router();
 
-    // A link made while browsing via localhost must still work for other devices.
-    function origin(req) {
+    // The main link is always a network address, so a transfer between two people on the same LAN
+    // never touches the internet. A link made while browsing via localhost must still work for other devices.
+    function lanOrigin(req) {
         const host = req.hostname;
-        const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-        return `${req.protocol}://${local ? findNetworkIP() : host}:${cfg.port}`;
+        const loopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+        const viaPublic = cfg.publicUrl && host === new URL(cfg.publicUrl).hostname;
+        return `${req.protocol}://${loopback || viaPublic ? findNetworkIP() : host}:${cfg.port}`;
     }
 
-    const present = (req, share) => ({ ...share, url: `${origin(req)}/s/${share.token}` });
+    const present = (req, share) => ({
+        ...share,
+        url: `${lanOrigin(req)}/s/${share.token}`, // same network
+        internetUrl: cfg.publicUrl ? `${cfg.publicUrl}/s/${share.token}` : null, // anyone, over the internet
+    });
 
     router.post('/shares', async (req, res, next) => {
         try {
