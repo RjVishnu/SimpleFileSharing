@@ -212,4 +212,19 @@ input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); c
   .summary { display: none; }
   .pv-body { padding: 0 8px 16px; }
   .list.grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .select-all { white-space: nowrap; }
+  .toolbar { gap: 8px; flex-wrap: wrap; }
+  .tools-right { gap: 6px; }
+  .tools-right select { max-width: 92px; }
+}
+
+/* phones: the search box folds into an icon that expands over the top bar while focused */
+@media (max-width: 560px) {
+  .topbar { gap: 8px; }
+  .search { flex: 0 0 40px; width: 40px; padding: 0; justify-content: center; cursor: pointer; }
+  .search input { width: 0; flex: 0 0 0; }
+  .search:focus-within { position: absolute; left: 10px; right: 10px; top: 10px; width: auto; padding: 0 14px; justify-content: flex-start; background: var(--surface); z-index: 2; }
+  .search:focus-within input { flex: 1; width: auto; }
+  .top-actions { gap: 0; }
+  .icon-btn { min-width: 36px; }
 }
