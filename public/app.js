@@ -22,6 +22,7 @@ const SVG = {
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     download: '<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
     upload: '<path d="M12 16V5M7 9l5-5 5 5M5 20h14"/>',
+    send: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/>',
     folderplus: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
@@ -684,6 +685,89 @@ async function folderPicker(start) {
     } catch (error) { toast(error.message, true); }
 }
 
+// ---------- nearby devices (direct transfer, never stored on the server) ----------
+const KIND_ICON = { phone: '📱', tablet: '📱', laptop: '💻' };
+let p2pTray = null;
+let p2pDialogOpen = false;
+
+function trayCard(id, ...children) {
+    if (!p2pTray) { p2pTray = h('div', { class: 'p2p-tray' }); document.body.append(p2pTray); }
+    let card = [...p2pTray.children].find((c) => c.dataset.tid === id);
+    if (!card) { card = h('div', { class: 'p2p-card' }); card.dataset.tid = id; p2pTray.append(card); }
+    card.classList.remove('error');
+    card.replaceChildren(...children.filter(Boolean));
+    return card;
+}
+const dropCard = (id, delay = 0) => setTimeout(() => p2pTray && [...p2pTray.children].find((c) => c.dataset.tid === id)?.remove(), delay);
+
+function renderP2PDialog() {
+    const peers = window.P2P.peers();
+    const input = h('input', { type: 'file', multiple: true, hidden: true });
+    let target = null;
+    input.onchange = () => {
+        [...input.files].forEach((file) => window.P2P.send(target, file));
+        input.value = '';
+        p2pDialogOpen = false;
+        closeDialog();
+    };
+    const body = h('div', {},
+        h('p', { class: 'muted' }, 'You appear as ', h('strong', {}, window.P2P.name), ' to other devices on this network. ',
+            h('a', { href: '#', onclick: async (e) => {
+                e.preventDefault();
+                const name = await promptName('Name shown to nearby devices', window.P2P.name, 'Save');
+                if (name) window.P2P.rename(name);
+                renderP2PDialog();
+            } }, 'Rename')),
+        peers.length
+            ? peers.map((p) => h('div', { class: 'p2p-device' },
+                h('span', { class: 'ico' }, KIND_ICON[p.kind] || '💻'),
+                h('span', { class: 'who' }, p.name),
+                btn('Send file…', () => { target = p.id; input.click(); }, 'primary')))
+            : h('p', {}, 'No other devices found yet. Open this site on another phone or computer on the same Wi-Fi and it will show up here.'),
+        h('p', { class: 'p2p-help' }, 'Files go straight from your device to theirs. They are not uploaded to the server and use no internet data.'),
+        input);
+    dialog('Send to a nearby device', body, [btn('Close', () => { p2pDialogOpen = false; closeDialog(); })]);
+    p2pDialogOpen = true;
+}
+
+function initP2P() {
+    const P2P = window.P2P;
+    $('btn-p2p').hidden = false;
+    $('btn-p2p').onclick = renderP2PDialog;
+    P2P.on('peers', (peers) => {
+        $('btn-p2p').lastChild.textContent = peers.length ? `Send to device (${peers.length})` : 'Send to device';
+        if (p2pDialogOpen && !$('dialog').hidden) renderP2PDialog();
+    });
+
+    P2P.on('incoming', (req) => {
+        const big = req.size > 1.5 * 1024 ** 3 && !(window.showSaveFilePicker && window.isSecureContext);
+        trayCard(req.tid,
+            h('div', { class: 'p2p-title' }, `${req.peerName} wants to send you a file`),
+            h('div', {}, `${req.name} · ${formatBytes(req.size)}`),
+            big ? h('div', { class: 'muted' }, 'This is a large file and this browser keeps it in memory while receiving. If it fails, ask for a share link instead.') : null,
+            h('div', { class: 'p2p-row' },
+                btn('Decline', () => { req.decline(); dropCard(req.tid); }),
+                btn('Accept', () => { req.accept(); }, 'primary')));
+    });
+
+    const bar = (tid, e, label) => trayCard(tid,
+        h('div', { class: 'p2p-title' }, `${label} ${e.name}`),
+        h('div', { class: 'muted' }, `${e.peerName} · ${formatBytes(e.done || 0)} of ${formatBytes(e.size)}`),
+        h('div', { class: 'bar' }, h('i', { style: `width:${e.size ? Math.min(100, (e.done / e.size) * 100) : 100}%` })),
+        h('div', { class: 'p2p-row' }, btn('Cancel', () => P2P.cancel(tid))));
+    P2P.on('start', (e) => bar(e.tid, { ...e, done: 0 }, e.dir === 'send' ? 'Sending' : 'Receiving'));
+    P2P.on('progress', (e) => bar(e.tid, e, e.dir === 'send' ? 'Sending' : 'Receiving'));
+    P2P.on('done', (e) => {
+        trayCard(e.tid, h('div', { class: 'p2p-title' }, e.dir === 'send' ? `Sent ${e.name} to ${e.peerName}` : `Received ${e.name} from ${e.peerName}`));
+        dropCard(e.tid, 5000);
+    });
+    P2P.on('error', (e) => {
+        trayCard(e.tid, h('div', { class: 'p2p-title' }, e.name), h('div', {}, e.message)).classList.add('error');
+        dropCard(e.tid, 9000);
+    });
+    P2P.start();
+}
+
 // ---------- upload ----------
 function uploadOne(file, onProgress) {
     return new Promise((resolve, reject) => {
@@ -829,6 +913,7 @@ async function init() {
     $('btn-shares').hidden = !m.canShare;
     $('btn-folders').hidden = !m.canManage;
     $('btn-logout').hidden = !m.hasPassword;
+    if (m.canP2P && window.P2P && window.RTCPeerConnection) initP2P();
     const badge = $('net-badge');
     badge.hidden = false;
     badge.className = 'net-badge ' + (m.local ? 'local' : 'internet');

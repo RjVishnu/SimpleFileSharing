@@ -17,6 +17,7 @@ Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pk
 
 - Browse with breadcrumbs, list/grid view, sorting, recursive name search
 - Preview images (zoom, wheel, click), video, audio, PDF, text/code; prev/next with ← → keys
+- **Send to device**: direct phone-to-computer transfer over the local network, never stored on the server
 - Multi-select → ZIP download (files and folders)
 - Upload via button or drag & drop, with progress; name conflicts become `name (1).ext`
 - **Share links**: per file or folder, optional expiry, QR code, download counter, revoke anytime. Links are read-only and limited to what was shared; they work without the password
@@ -28,6 +29,16 @@ Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pk
 Click the ⚙ button in the top bar to add or remove shared folders, rename them, and pick folders from a built-in browser of this computer (or type a path). With one folder the site shows its contents directly; with several, the home page lists them. Changes apply immediately and are saved in `data/settings.json`; the first run starts from `--dir` / `SHARE_ROOT` / `config.js`.
 
 Removing a folder only stops sharing it (files stay on disk) and its share links stop working. Because this lets a visitor expose any folder on the host, the ⚙ button is only available when a password is set, when you open the site from the same computer, or when `ALLOW_SETTINGS=true`.
+
+## Send to a nearby device (direct, nothing stored on the server)
+
+Click **Send to device** to see other phones and computers that have this site open on the same network, pick one and choose a file. The other person gets an Accept / Decline card, and the file then travels straight from your browser to theirs over WebRTC. The server only introduces the two devices; it never receives the file, and no internet data is used.
+
+- Works for any size. Chrome and Edge on a secure page (localhost or HTTPS) stream the file to disk; on plain-HTTP LAN pages the receiver assembles it in memory first, so for multi-GB files prefer a share link.
+- Devices on the local network see each other; visitors from the internet only see others behind the same public address.
+- Both devices need to be open on the page. For a transfer that doesn't need the other person present, use a share link.
+- Across different networks the browsers usually can't reach each other directly. Set `STUN_SERVERS` (for example `stun:stun.l.google.com:19302`) to allow it; this tells that STUN server the devices' public addresses, which is why it is off by default. If the connection still fails, use a share link.
+- Turn it off with `ALLOW_P2P=false`.
 
 ## Same network first, internet only if needed
 
@@ -52,6 +63,8 @@ CLI flags override environment variables, which override `config.js`.
 | Max items per ZIP | `MAX_ZIP_FILES` | `500` |
 | Branding | `--brand-name`, `--brand-color`, `--brand-logo` / `BRAND_NAME`, `BRAND_COLOR` (`#rrggbb`), `BRAND_LOGO` (image path) | none |
 | Internet address | `--public-url` / `PUBLIC_URL` (e.g. `https://files.example.com`) | none |
+| Direct transfer | `ALLOW_P2P` | `true` |
+| STUN servers (cross-network direct transfer) | `--stun` / `STUN_SERVERS` (comma-separated `stun:` URLs) | none |
 | Share-link storage | `DATA_DIR` | `./data` |
 
 ## Security notes
@@ -68,11 +81,11 @@ server.js            entry point
 config.js            default settings
 src/config.js        merges flags / env / defaults
 src/app.js           express wiring (admin scope + share-link scope)
-src/routes/          browse, files, upload, manage, shares, folders
+src/routes/          browse, files, upload, manage, shares, folders, p2p (device-to-device signalling)
 src/middleware/      auth, security headers
 src/services/        share-link store, shared-folder settings store
 src/lib/             scope, path safety, file types, network
-public/              single-page UI (index.html, app.js, app.css, brand.js, login)
+public/              single-page UI (index.html, app.js, app.css, brand.js, p2p.js, login)
 test/smoke.js        end-to-end tests (npm test)
 docs/archive/        notes from the previous implementation
 ```

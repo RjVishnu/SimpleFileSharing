@@ -233,5 +233,94 @@ const post = (url, body, headers = {}) =>
         });
     }
 
+    // Device-to-device signalling relay
+    await run({ STUN_SERVERS: 'stun:stun.example.com:3478,junk' }, async ({ url }) => {
+        // Minimal SSE client: collects events and lets the test wait for one
+        const connect = async (query, headers = {}) => {
+            const ctl = new AbortController();
+            const res = await fetch(`${url}/api/p2p/events?${query}`, { headers, signal: ctl.signal });
+            assert.strictEqual(res.status, 200);
+            const events = [];
+            const waiters = [];
+            (async () => {
+                const reader = res.body.getReader();
+                const dec = new TextDecoder();
+                let buf = '';
+                try {
+                    for (;;) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buf += dec.decode(value, { stream: true });
+                        let i;
+                        while ((i = buf.indexOf('\n\n')) >= 0) {
+                            const block = buf.slice(0, i); buf = buf.slice(i + 2);
+                            const ev = /^event: (.+)$/m.exec(block), data = /^data: (.+)$/m.exec(block);
+                            if (ev && data) { events.push({ event: ev[1], data: JSON.parse(data[1]) }); waiters.splice(0).forEach((w) => w()); }
+                        }
+                    }
+                } catch { /* aborted */ }
+            })();
+            const next = async (name) => {
+                for (let t = 0; t < 100; t++) {
+                    const k = events.findIndex((e) => e.event === name);
+                    if (k >= 0) return events.splice(k, 1)[0].data;
+                    await new Promise((r) => { waiters.push(r); setTimeout(r, 50); });
+                }
+                throw new Error(`timed out waiting for ${name}`);
+            };
+            return { next, events, close: () => ctl.abort() };
+        };
+        const signal = (from, to, data, extra = {}) =>
+            post(`${url}/api/p2p/signal`, { to, data }, { 'X-Peer-Id': from, ...extra });
+
+        assert.deepStrictEqual(await json(await fetch(`${url}/api/p2p/config`)), { iceServers: [{ urls: ['stun:stun.example.com:3478'] }] });
+
+        const a = await connect('name=Alice&kind=phone');
+        const helloA = await a.next('hello');
+        assert.strictEqual(helloA.name, 'Alice');
+        assert.deepStrictEqual(helloA.peers, []);
+
+        const b = await connect('name=' + encodeURIComponent('<b>Bob</b>') + '&kind=bogus');
+        const helloB = await b.next('hello');
+        assert.strictEqual(helloB.name, 'bBob/b'); // markup stripped
+        assert.deepStrictEqual(helloB.peers.map((p) => p.name), ['Alice']);
+        const joined = await a.next('peer-joined');
+        assert.strictEqual(joined.id, helloB.id);
+        assert.strictEqual(joined.kind, 'laptop'); // unknown kind falls back
+
+        // a different network (forwarded from a public address) lands in another room
+        const far = await connect('name=Far', { 'X-Forwarded-For': '203.0.113.9' });
+        const helloFar = await far.next('hello');
+        assert.deepStrictEqual(helloFar.peers, []);
+
+        // relay A -> B, only within the room
+        assert.strictEqual((await signal(helloA.id, helloB.id, { k: 'offer', tid: 't1' })).status, 200);
+        const got = await b.next('signal');
+        assert.strictEqual(got.from, helloA.id);
+        assert.deepStrictEqual(got.data, { k: 'offer', tid: 't1' });
+        assert.strictEqual((await signal(helloA.id, 'nobody', { k: 'x' })).status, 404);
+        assert.strictEqual((await signal('forged-id', helloB.id, { k: 'x' })).status, 403);
+        assert.strictEqual((await signal(helloA.id, helloB.id, { k: 'big', pad: 'x'.repeat(70000) })).status, 400);
+        // rooms are isolated in both directions, and a peer id only works from its own network
+        assert.strictEqual((await signal(helloA.id, helloFar.id, { k: 'x' })).status, 404);
+        assert.strictEqual((await signal(helloFar.id, helloA.id, { k: 'x' })).status, 403);
+        assert.strictEqual((await signal(helloFar.id, helloA.id, { k: 'x' }, { 'X-Forwarded-For': '203.0.113.9' })).status, 404);
+
+        // leaving is announced
+        b.close();
+        assert.strictEqual((await a.next('peer-left')).id, helloB.id);
+        a.close(); far.close();
+    });
+
+    // P2P can be switched off, and needs the password like everything else
+    await run({ ALLOW_P2P: 'false' }, async ({ url }) => {
+        assert.strictEqual((await json(await fetch(`${url}/api/me`))).canP2P, false);
+        assert.strictEqual((await fetch(`${url}/api/p2p/config`)).status, 404);
+    });
+    await run({ SHARE_PASSWORD: 'pw123' }, async ({ url }) => {
+        assert.strictEqual((await fetch(`${url}/api/p2p/events`)).status, 401);
+        assert.strictEqual((await post(`${url}/api/p2p/signal`, { to: 'x', data: {} })).status, 401);
+    });
+
     console.log('All smoke tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

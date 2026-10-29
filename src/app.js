@@ -10,6 +10,7 @@ const { createUploadRouter } = require('./routes/upload');
 const { createManageRouter } = require('./routes/manage');
 const { createSharesRouter } = require('./routes/shares');
 const { createFoldersRouter } = require('./routes/folders');
+const { createP2PRouter } = require('./routes/p2p');
 const { SettingsStore } = require('./services/settingsStore');
 const { createScope } = require('./lib/scope');
 const { isInside, HttpError } = require('./lib/paths');
@@ -83,9 +84,14 @@ function createApp(cfg) {
             rootName: req.scope.flat ? req.scope.mounts[0].name : 'Shared folders',
             local: clientIsLocal(req),
             hasPublicUrl: Boolean(cfg.publicUrl),
+            canP2P: cfg.allowP2P,
         })
     );
     admin.use(createFoldersRouter(settings));
+    if (cfg.allowP2P) {
+        const roomOf = (req) => (clientIsLocal(req) ? 'lan' : String(req.headers['x-forwarded-for'] || req.ip).split(',')[0].trim());
+        admin.use(createP2PRouter(cfg, { roomOf }));
+    }
     admin.use(createSharesRouter(cfg, shares));
     admin.use(scoped);
     app.use('/api', admin);

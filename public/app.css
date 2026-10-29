@@ -154,6 +154,20 @@ input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); c
 .list.grid .meta.date { display: none; }
 .list.grid .row-actions { position: absolute; top: 12px; right: 12px; background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); }
 
+/* direct device-to-device transfer */
+.p2p-tray { position: fixed; right: 16px; bottom: 16px; z-index: 12; display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); }
+.p2p-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 10px 30px rgba(10,20,50,.2); padding: 12px 14px; font-size: 13px; display: grid; gap: 8px; }
+.p2p-card .p2p-title { font-weight: 600; word-break: break-word; }
+.p2p-card .p2p-row { display: flex; gap: 8px; justify-content: flex-end; }
+.p2p-card .bar { height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; }
+.p2p-card .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
+.p2p-card.error { border-color: #e5484d; }
+.p2p-device { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.p2p-device:last-child { border-bottom: 0; }
+.p2p-device .ico { font-size: 26px; }
+.p2p-device .who { flex: 1; min-width: 0; font-weight: 600; word-break: break-word; }
+.dialog .p2p-help { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
 /* floating selection bar */
 .selbar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; display: flex; gap: 8px; align-items: center; padding: 8px 10px 8px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 10px 40px rgba(10,20,50,.25); max-width: calc(100vw - 24px); flex-wrap: wrap; justify-content: center; }
 #selbar-count { font-weight: 600; margin-right: 6px; }
