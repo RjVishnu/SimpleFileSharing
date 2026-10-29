@@ -127,6 +127,7 @@ input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); c
 .row:hover { background: var(--hover); }
 .row.selected { background: var(--sel); }
 .badge { width: 40px; height: 40px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; font-size: 21px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); overflow: hidden; }
+.badge img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .badge.folder { --c: var(--c-folder); } .badge.image { --c: var(--c-image); } .badge.video { --c: var(--c-video); }
 .badge.audio { --c: var(--c-audio); } .badge.pdf { --c: var(--c-pdf); } .badge.text { --c: var(--c-text); }
 .badge.archive { --c: var(--c-archive); } .badge.other { --c: var(--c-other); }

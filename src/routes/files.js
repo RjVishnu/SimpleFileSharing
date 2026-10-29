@@ -7,7 +7,7 @@ const { kindOf } = require('../lib/fileTypes');
 
 const TEXT_PREVIEW_MAX = 2 * 1024 * 1024;
 
-function createFilesRouter(cfg, shares) {
+function createFilesRouter(cfg, shares, thumbs) {
     const router = express.Router();
 
     // Serve a file inline (preview) or as an attachment (?download=1). Supports Range requests.
@@ -26,6 +26,23 @@ function createFilesRouter(cfg, shares) {
             const options = { dotfiles: 'allow' };
             if (download) res.download(abs, path.basename(abs), options, (err) => err && next(err));
             else res.sendFile(abs, options, (err) => err && next(err));
+        } catch (error) {
+            next(error.code === 'ENOENT' ? new HttpError(404, 'File not found') : error);
+        }
+    });
+
+    // Small resized copy of an image for lists and galleries. 415 means "use the original instead".
+    // Does not count as a download, so share-link counters only reflect real downloads.
+    router.get('/thumb', async (req, res, next) => {
+        try {
+            const abs = req.scope.resolveReal(req.query.path);
+            const stats = await fs.stat(abs);
+            if (!stats.isFile()) throw new HttpError(404, 'File not found');
+            const file = thumbs ? await thumbs.get(abs, stats, req.query.w) : null;
+            if (!file) throw new HttpError(415, 'No thumbnail for this file');
+            // The client adds the file's modified time as v=, so a changed file gets a new URL.
+            const cache = req.query.v ? 'private, max-age=31536000, immutable' : 'private, max-age=300';
+            res.sendFile(file, { dotfiles: 'allow', cacheControl: false, headers: { 'Cache-Control': cache } }, (err) => err && next(err));
         } catch (error) {
             next(error.code === 'ENOENT' ? new HttpError(404, 'File not found') : error);
         }

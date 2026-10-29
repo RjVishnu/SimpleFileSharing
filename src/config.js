@@ -70,6 +70,8 @@ function load(argv = process.argv.slice(2), env = process.env) {
             .filter(Boolean),
         brand: loadBrand(args, env),
         publicUrl: loadPublicUrl(args, env),
+        thumbnails: truthy(args.thumbnails ?? env.THUMBNAILS, true),
+        thumbCacheBytes: Number(env.THUMB_CACHE_MB || 500) * 1024 * 1024,
         allowP2P: truthy(args['allow-p2p'] ?? env.ALLOW_P2P, true),
         // Optional STUN servers so devices on different networks can connect directly, e.g. stun:stun.l.google.com:19302.
         // Left empty, direct transfer works only on the local network and nothing is sent to third parties.

@@ -112,6 +112,17 @@ const post = (url, body) => api(url, {
 const q = (p) => encodeURIComponent(p);
 const fileUrl = (p, download) => `${BASE}/api/file?path=${q(p)}${download ? '&download=1' : ''}`;
 
+// Small resized copy of an image (generated and cached by the server). Falls back to the original
+// if the server can't make one (unsupported format, sharp not installed, corrupt file).
+const THUMBABLE = /\.(jpe?g|png|gif|webp|bmp|tiff?|avif)$/i;
+function thumbImg(item, width, props = {}) {
+    const small = state.me.thumbs && THUMBABLE.test(item.name);
+    const img = h('img', { loading: 'lazy', decoding: 'async', alt: '', ...props,
+        src: small ? `${BASE}/api/thumb?path=${q(item.path)}&w=${width}&v=${Math.round(item.modified || 0)}` : fileUrl(item.path) });
+    if (small) img.addEventListener('error', () => { img.src = fileUrl(item.path); }, { once: true });
+    return img;
+}
+
 const parentOf = (p) => p.split('/').slice(0, -1).join('/');
 
 // ---------- data / routing ----------
@@ -184,8 +195,8 @@ function renderRow(item) {
         type: 'checkbox', checked, 'aria-label': 'Select ' + item.name,
         onclick: (e) => { e.stopPropagation(); toggleSelect(item.path, e.target.checked); },
     });
-    const thumb = state.view === 'grid' && item.kind === 'image'
-        ? badge(item.kind, h('img', { loading: 'lazy', src: fileUrl(item.path), alt: '' }))
+    const thumb = item.kind === 'image'
+        ? badge(item.kind, thumbImg(item, state.view === 'grid' ? 320 : 160))
         : badge(item.kind);
     const where = state.searching && parentOf(item.path) ? h('small', {}, parentOf(item.path)) : null;
 
@@ -277,7 +288,7 @@ function renderGallery(list, items) {
         },
             h('input', { type: 'checkbox', checked: state.selected.has(item.path), 'aria-label': 'Select ' + item.name,
                 onclick: (e) => { e.stopPropagation(); toggleSelect(item.path, e.target.checked); } }),
-            h('img', { loading: 'lazy', src: fileUrl(item.path), alt: item.name }),
+            thumbImg(item, 640, { alt: item.name }),
             h('div', { class: 'cap' }, item.name)))));
     }
     if (others.length) parts.push(h('div', { class: 'others' }, others.map(renderRow)));
@@ -363,7 +374,7 @@ function renderDetails() {
         const item = selected[0];
         const isFolder = item.type === 'folder';
         const preview = item.kind === 'image'
-            ? badge('image', h('img', { src: fileUrl(item.path), alt: '' }))
+            ? badge('image', thumbImg(item, 640))
             : badge(item.kind);
         preview.classList.add('dt-preview');
         const dims = h('dd', {}, '—');

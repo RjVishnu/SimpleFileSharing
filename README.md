@@ -17,6 +17,7 @@ Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pk
 
 - Browse with breadcrumbs, list/grid view, sorting, recursive name search
 - Preview images (zoom, wheel, click), video, audio, PDF, text/code; prev/next with ← → keys
+- Photo thumbnails in lists, grid and gallery (cached, original untouched)
 - **Send to device**: direct phone-to-computer transfer over the local network, never stored on the server
 - Multi-select → ZIP download (files and folders)
 - Upload via button or drag & drop, with progress; name conflicts become `name (1).ext`
@@ -29,6 +30,12 @@ Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pk
 Click the ⚙ button in the top bar to add or remove shared folders, rename them, and pick folders from a built-in browser of this computer (or type a path). With one folder the site shows its contents directly; with several, the home page lists them. Changes apply immediately and are saved in `data/settings.json`; the first run starts from `--dir` / `SHARE_ROOT` / `config.js`.
 
 Removing a folder only stops sharing it (files stay on disk) and its share links stop working. Because this lets a visitor expose any folder on the host, the ⚙ button is only available when a password is set, when you open the site from the same computer, or when `ALLOW_SETTINGS=true`.
+
+## Thumbnails
+
+Lists, the grid and the gallery show small resized copies of photos instead of the full files, so a folder of large photos opens quickly and uses far less data. They are made on first view (about 0.1 s per 12-megapixel photo), cached under `data/thumbs` (limited to `THUMB_CACHE_MB`, oldest removed first), and a changed photo gets a new thumbnail. Opening a photo, downloading, and share-link download counts all use the original, untouched file.
+
+Thumbnails need the optional `sharp` package (installed by `npm install`; it has native parts). If it is missing, or for formats it can't read, the original image is shown instead. They are not available in the packaged `.exe` (`pkg` can't bundle sharp's native files; the build prints two warnings about this), so run `node server.js` where you want them. Turn off with `THUMBNAILS=false`.
 
 ## Send to a nearby device (direct, nothing stored on the server)
 
@@ -63,6 +70,7 @@ CLI flags override environment variables, which override `config.js`.
 | Max items per ZIP | `MAX_ZIP_FILES` | `500` |
 | Branding | `--brand-name`, `--brand-color`, `--brand-logo` / `BRAND_NAME`, `BRAND_COLOR` (`#rrggbb`), `BRAND_LOGO` (image path) | none |
 | Internet address | `--public-url` / `PUBLIC_URL` (e.g. `https://files.example.com`) | none |
+| Thumbnails | `THUMBNAILS`, `THUMB_CACHE_MB` | `true`, `500` |
 | Direct transfer | `ALLOW_P2P` | `true` |
 | STUN servers (cross-network direct transfer) | `--stun` / `STUN_SERVERS` (comma-separated `stun:` URLs) | none |
 | Share-link storage | `DATA_DIR` | `./data` |
@@ -83,9 +91,9 @@ src/config.js        merges flags / env / defaults
 src/app.js           express wiring (admin scope + share-link scope)
 src/routes/          browse, files, upload, manage, shares, folders, p2p (device-to-device signalling)
 src/middleware/      auth, security headers
-src/services/        share-link store, shared-folder settings store
+src/services/        share-link store, shared-folder settings store, thumbnails
 src/lib/             scope, path safety, file types, network
 public/              single-page UI (index.html, app.js, app.css, brand.js, p2p.js, login)
-test/smoke.js        end-to-end tests (npm test)
+test/                end-to-end tests (npm test): smoke.js, thumbs.js
 docs/archive/        notes from the previous implementation
 ```

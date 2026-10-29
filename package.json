@@ -10,7 +10,7 @@
     "build-exe": "pkg . --target node18-win32-x64 --output ./dist/FileServer.exe",
     "build-linux": "node build-linux.js",
     "build-all": "node build-all.js",
-    "test": "node test/smoke.js"
+    "test": "node test/smoke.js && node test/thumbs.js"
   },
   "pkg": {
     "scripts": [
@@ -40,5 +40,8 @@
     "node": ">=14.0.0"
   },
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "optionalDependencies": {
+    "sharp": "^0.35.5"
+  }
 }

@@ -10,6 +10,7 @@ const { createUploadRouter } = require('./routes/upload');
 const { createManageRouter } = require('./routes/manage');
 const { createSharesRouter } = require('./routes/shares');
 const { createFoldersRouter } = require('./routes/folders');
+const { Thumbnails } = require('./services/thumbnails');
 const { createP2PRouter } = require('./routes/p2p');
 const { SettingsStore } = require('./services/settingsStore');
 const { createScope } = require('./lib/scope');
@@ -53,7 +54,8 @@ function createApp(cfg) {
     // Each request carries a `scope` describing what it may touch.
     const scoped = express.Router({ mergeParams: true });
     scoped.use(createBrowseRouter());
-    scoped.use(createFilesRouter(cfg, shares));
+    const thumbs = cfg.thumbnails ? new Thumbnails(path.join(cfg.dataDir, 'thumbs'), cfg.thumbCacheBytes) : null;
+    scoped.use(createFilesRouter(cfg, shares, thumbs));
     scoped.use(createUploadRouter(cfg));
     scoped.use(createManageRouter());
 
@@ -85,6 +87,7 @@ function createApp(cfg) {
             local: clientIsLocal(req),
             hasPublicUrl: Boolean(cfg.publicUrl),
             canP2P: cfg.allowP2P,
+            thumbs: Boolean(thumbs && thumbs.ready),
         })
     );
     admin.use(createFoldersRouter(settings));
@@ -112,7 +115,7 @@ function createApp(cfg) {
         next();
     });
     share.get('/api/me', (req, res) =>
-        res.json({ mode: 'share', canUpload: false, canModify: false, canShare: false, rootName: 'Shared', local: clientIsLocal(req) })
+        res.json({ mode: 'share', canUpload: false, canModify: false, canShare: false, rootName: 'Shared', local: clientIsLocal(req), thumbs: Boolean(thumbs && thumbs.ready) })
     );
     share.use('/api', scoped);
     share.get('/', (req, res) => renderIndex(`/s/${req.params.token}`)(req, res));
