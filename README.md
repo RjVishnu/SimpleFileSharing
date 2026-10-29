@@ -11,7 +11,7 @@ node server.js --dir "D:\Photos" --port 5002 --password secret
 npm test                        # end-to-end smoke tests
 ```
 
-Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pkg`).
+Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pkg`; the Windows build is tested, the Linux one is not). Output goes to `dist/`.
 
 ## Features
 
@@ -60,11 +60,11 @@ server.js            entry point
 config.js            default settings
 src/config.js        merges flags / env / defaults
 src/app.js           express wiring (admin scope + share-link scope)
-src/routes/          browse, files, upload, manage, shares
+src/routes/          browse, files, upload, manage, shares, folders
 src/middleware/      auth, security headers
-src/services/        share-link store
-src/lib/             path safety, file types, network
-public/              single-page UI (index.html, app.js, app.css, login)
-test/smoke.js        end-to-end tests
+src/services/        share-link store, shared-folder settings store
+src/lib/             scope, path safety, file types, network
+public/              single-page UI (index.html, app.js, app.css, brand.js, login)
+test/smoke.js        end-to-end tests (npm test)
 docs/archive/        notes from the previous implementation
 ```
