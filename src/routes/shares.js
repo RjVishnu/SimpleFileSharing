@@ -2,6 +2,7 @@ const fs = require('fs').promises;
 const express = require('express');
 const QRCode = require('qrcode');
 const { HttpError } = require('../lib/paths');
+const { hashPassword } = require('../lib/password');
 const { findNetworkIP } = require('../lib/network');
 
 // Admin-only: create / list / revoke share links, and render QR codes.
@@ -17,8 +18,10 @@ function createSharesRouter(cfg, shares) {
         return `${req.protocol}://${loopback || viaPublic ? findNetworkIP() : host}:${cfg.port}`;
     }
 
-    const present = (req, share) => ({
+    // The password hash never leaves the server.
+    const present = (req, { pw, ...share }) => ({
         ...share,
+        protected: Boolean(pw),
         url: `${lanOrigin(req)}/s/${share.token}`, // same network
         internetUrl: cfg.publicUrl ? `${cfg.publicUrl}/s/${share.token}` : null, // anyone, over the internet
     });
@@ -29,11 +32,18 @@ function createSharesRouter(cfg, shares) {
             const stats = await fs.stat(abs);
             const minutes = Number(req.body.expiresInMinutes) || 0;
             if (minutes < 0 || minutes > 60 * 24 * 365) throw new HttpError(400, 'Invalid expiry');
+            const password = req.body.password;
+            if (password) {
+                if (typeof password !== 'string' || password.length < 4 || password.length > 128) {
+                    throw new HttpError(400, 'The password must be 4 to 128 characters');
+                }
+            }
             const share = shares.create({
                 path: req.body.path || '',
                 abs, // real location, so the link keeps working if folders are reorganised
                 type: stats.isDirectory() ? 'folder' : 'file',
                 expiresInMinutes: minutes,
+                passwordHash: password ? await hashPassword(password) : null,
             });
             res.status(201).json(present(req, share));
         } catch (error) {

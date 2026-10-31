@@ -598,14 +598,17 @@ function shareDialog(target) {
         h('option', { value: '60' }, '1 hour'), h('option', { value: '1440', selected: true }, '24 hours'),
         h('option', { value: '10080' }, '7 days'), h('option', { value: '43200' }, '30 days'),
         h('option', { value: '0' }, 'Never'));
+    const password = h('input', { type: 'password', placeholder: 'Optional', autocomplete: 'new-password', maxlength: '128' });
     const result = h('div');
     const create = btn('Create link', async () => {
         try {
-            const share = await (await post('/shares', { path: p, expiresInMinutes: Number(expiry.value) })).json();
+            if (password.value && password.value.length < 4) return toast('Use at least 4 characters for the password', true);
+            const share = await (await post('/shares', { path: p, expiresInMinutes: Number(expiry.value), password: password.value || undefined })).json();
             const linkRow = (value) => h('div', { class: 'field' },
                 h('input', { type: 'text', value, readonly: true }),
                 btn('Copy', () => copyText(value).then(() => toast('Link copied'))));
-            result.replaceChildren(
+            result.replaceChildren(...[
+                share.protected ? h('p', { class: 'net-note' }, '🔒 Password protected. Send the password separately from the link.') : null,
                 h('div', { class: 'link-label' }, 'On this network'),
                 linkRow(share.url),
                 h('p', { class: 'net-note' }, 'For anyone on the same Wi-Fi or LAN. The file goes straight from this computer, using no internet data.'),
@@ -613,19 +616,21 @@ function shareDialog(target) {
                 share.internetUrl ? h('div', {},
                     h('div', { class: 'link-label' }, 'Over the internet'),
                     linkRow(share.internetUrl),
-                    h('p', { class: 'net-note' }, 'For people outside your network. The file travels over the internet.')) : null);
+                    h('p', { class: 'net-note' }, 'For people outside your network. The file travels over the internet.')) : null,
+            ].filter(Boolean));
             create.remove();
         } catch (error) { toast(error.message, true); }
     }, 'primary');
     dialog('Share link', h('div', {}, h('p', {}, p.split('/').pop()),
-        h('div', { class: 'field' }, 'Expires after', expiry), result), [btn('Close', closeDialog), create]);
+        h('div', { class: 'field' }, 'Expires after', expiry),
+        h('div', { class: 'field' }, 'Password', password), result), [btn('Close', closeDialog), create]);
 }
 
 async function sharesManager() {
     try {
         const shares = await (await api('/shares')).json();
         const body = shares.length ? h('div', {}, ...shares.map((s) => h('div', { class: 'share-item' },
-            h('div', {}, `${s.type === 'folder' ? '📁' : '📄'} /${s.path}`),
+            h('div', {}, `${s.type === 'folder' ? '📁' : '📄'} /${s.path}${s.protected ? '  🔒' : ''}`),
             h('a', { class: 'link', href: s.url, target: '_blank', rel: 'noopener' }, s.url),
             s.internetUrl ? h('a', { class: 'link', href: s.internetUrl, target: '_blank', rel: 'noopener' }, s.internetUrl) : null,
             h('div', {}, `${s.downloads} download(s) · ${s.expiresAt ? 'expires ' + formatDate(s.expiresAt) : 'never expires'} `,

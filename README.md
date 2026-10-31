@@ -21,7 +21,7 @@ Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pk
 - **Send to device**: direct phone-to-computer transfer over the local network, never stored on the server
 - Multi-select → ZIP download (files and folders)
 - Upload via button or drag & drop, with progress; name conflicts become `name (1).ext`
-- **Share links**: per file or folder, optional expiry, QR code, download counter, revoke anytime. Links are read-only and limited to what was shared; they work without the password
+- **Share links**: per file or folder, optional expiry and **optional link password**, QR code, download counter, revoke anytime. Links are read-only and limited to what was shared; they work without the site password
 - Optional password login, dark mode, mobile friendly
 - New folder / rename / delete (enabled when a password is set, or `ALLOW_MODIFY=true`)
 
@@ -80,6 +80,7 @@ CLI flags override environment variables, which override `config.js`.
 - Without a password anyone on your network can browse and download the shared folder; set one for anything beyond a trusted LAN. Traffic is plain HTTP.
 - Paths are resolved inside the shared root (traversal and symlink escapes rejected); dotfiles are hidden and inaccessible.
 - Served files get `Content-Security-Policy: sandbox` so uploaded HTML/SVG can't run scripts.
+- A share link can have its own password (4 to 128 characters, set in the Share dialog). It is stored only as a salted scrypt hash. Visitors see an unlock page, and a correct password sets a cookie that works for that link only, for 12 hours or until the server restarts. Wrong guesses are limited to 10 per visitor and 40 per link every 15 minutes. Send the password separately from the link. Over plain HTTP the password and cookie can be read by anyone on the network path, so for anything sensitive use HTTPS.
 - Login is rate-limited; sessions use a signed HttpOnly SameSite=Strict cookie and reset on restart.
 
 ## Layout
@@ -90,10 +91,10 @@ config.js            default settings
 src/config.js        merges flags / env / defaults
 src/app.js           express wiring (admin scope + share-link scope)
 src/routes/          browse, files, upload, manage, shares, folders, p2p (device-to-device signalling)
-src/middleware/      auth, security headers
+src/middleware/      auth, share-link unlock, security headers
 src/services/        share-link store, shared-folder settings store, thumbnails
-src/lib/             scope, path safety, file types, network
-public/              single-page UI (index.html, app.js, app.css, brand.js, p2p.js, login)
+src/lib/             scope, path safety, file types, network, password hashing
+public/              single-page UI (index.html, app.js, app.css, brand.js, p2p.js, login, unlock)
 test/                end-to-end tests (npm test): smoke.js, thumbs.js
 docs/archive/        notes from the previous implementation
 ```

@@ -18,7 +18,7 @@ class ShareStore {
         fs.writeFileSync(this.file, JSON.stringify(this.shares, null, 2));
     }
 
-    create({ path: relPath, abs, type, expiresInMinutes }) {
+    create({ path: relPath, abs, type, expiresInMinutes, passwordHash }) {
         const token = crypto.randomBytes(16).toString('base64url');
         this.shares[token] = {
             token,
@@ -28,6 +28,7 @@ class ShareStore {
             createdAt: Date.now(),
             expiresAt: expiresInMinutes ? Date.now() + expiresInMinutes * 60000 : null,
             downloads: 0,
+            pw: passwordHash || null, // salted hash; the password itself is never stored
         };
         this.save();
         return this.shares[token];

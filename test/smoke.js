@@ -322,5 +322,87 @@ const post = (url, body, headers = {}) =>
         assert.strictEqual((await post(`${url}/api/p2p/signal`, { to: 'x', data: {} })).status, 401);
     });
 
+    // Password-protected share links
+    await run({}, async ({ url, root, cfg }) => {
+        const mk = async (body) => json(await post(`${url}/api/shares`, body));
+        const locked = await mk({ path: 'hello.txt', password: 'open-sesame' });
+        const open = await mk({ path: 'docs' });
+        const base = `${url}/s/${locked.token}`;
+
+        // the password is validated, hashed, and never returned or stored in clear
+        assert.strictEqual(locked.protected, true);
+        assert.strictEqual(open.protected, false);
+        assert.strictEqual((await post(`${url}/api/shares`, { path: 'hello.txt', password: 'abc' })).status, 400);
+        assert.strictEqual((await post(`${url}/api/shares`, { path: 'hello.txt', password: 'x'.repeat(129) })).status, 400);
+        assert.strictEqual((await post(`${url}/api/shares`, { path: 'hello.txt', password: ['a', 'b', 'c', 'd'] })).status, 400);
+        const listed = await json(await fetch(`${url}/api/shares`));
+        assert(listed.every((s) => !('pw' in s)) && !JSON.stringify(listed).includes('scrypt'));
+        const stored = fs.readFileSync(path.join(cfg.dataDir, 'shares.json'), 'utf8');
+        assert(stored.includes('scrypt$') && !stored.includes('open-sesame'));
+
+        // locked: visitors only get the unlock page; every API call is refused
+        const page = await fetch(base);
+        assert.strictEqual(page.status, 200);
+        assert.match(await page.text(), /This link is protected/);
+        for (const p of ['/api/list?path=', '/api/file?path=hello.txt', '/api/thumb?path=hello.txt', '/api/me', '/api/text?path=hello.txt'])
+            assert.strictEqual((await fetch(`${base}${p}`)).status, 401, p);
+        assert.strictEqual((await post(`${base}/api/zip`, { paths: ['hello.txt'] })).status, 401);
+        assert.strictEqual((await json(await fetch(`${url}/api/shares`))).find((s) => s.token === locked.token).downloads, 0);
+
+        // wrong password, then the right one
+        assert.strictEqual((await post(`${base}/unlock`, { password: 'nope' })).status, 401);
+        assert.strictEqual((await post(`${base}/unlock`, {})).status, 401);
+        const ok = await post(`${base}/unlock`, { password: 'open-sesame' });
+        assert.strictEqual(ok.status, 200);
+        const setCookie = ok.headers.get('set-cookie');
+        assert.match(setCookie, new RegExp(`Path=/s/${locked.token}`));
+        assert.match(setCookie, /HttpOnly/i);
+        const cookie = setCookie.split(';')[0];
+        const h = { Cookie: cookie };
+
+        assert.strictEqual((await fetch(base, { headers: h })).status, 200);
+        assert.notStrictEqual(await (await fetch(base, { headers: h })).text().then((t) => /This link is protected/.test(t)), true);
+        assert.deepStrictEqual((await json(await fetch(`${base}/api/list?path=`, { headers: h }))).items.map((i) => i.name), ['hello.txt']);
+        assert.strictEqual(await (await fetch(`${base}/api/file?path=hello.txt&download=1`, { headers: h })).text(), 'hi there');
+        assert.strictEqual((await fetch(`${base}/api/file?path=docs/note.md`, { headers: h })).status, 403); // still limited to the file
+
+        // the cookie is only good for its own link, and can't be forged or stretched
+        assert.strictEqual((await fetch(`${url}/s/${open.token}/api/list`)).status, 200); // unprotected link needs nothing
+        const other = await mk({ path: 'hello.txt', password: 'another-one' });
+        assert.strictEqual((await fetch(`${url}/s/${other.token}/api/list`, { headers: h })).status, 401);
+        const [expires, sig] = cookie.slice('su='.length).split('.');
+        assert.strictEqual((await fetch(`${base}/api/list`, { headers: { Cookie: `su=${expires}.${sig.slice(0, -2)}xx` } })).status, 401);
+        assert.strictEqual((await fetch(`${base}/api/list`, { headers: { Cookie: `su=${Number(expires) + 99999}.${sig}` } })).status, 401);
+        assert.strictEqual((await fetch(`${base}/api/list`, { headers: { Cookie: `su=${Date.now() - 1}.${sig}` } })).status, 401);
+
+        // revoking the link kills access even with a valid cookie
+        await fetch(`${url}/api/shares/${locked.token}`, { method: 'DELETE' });
+        assert.strictEqual((await fetch(`${base}/api/list`, { headers: h })).status, 404);
+    });
+
+    // Brute force on a protected link is throttled
+    await run({}, async ({ url }) => {
+        const share = await json(await post(`${url}/api/shares`, { path: 'hello.txt', password: 'correct-horse' }));
+        const base = `${url}/s/${share.token}`;
+        for (let i = 0; i < 10; i++) assert.strictEqual((await post(`${base}/unlock`, { password: `guess${i}` })).status, 401);
+        assert.strictEqual((await post(`${base}/unlock`, { password: 'guess-again' })).status, 429);
+        assert.strictEqual((await post(`${base}/unlock`, { password: 'correct-horse' })).status, 429); // even the right one while locked out
+        const fresh = await json(await post(`${url}/api/shares`, { path: 'hello.txt', password: 'correct-horse' }));
+        assert.strictEqual((await post(`${url}/s/${fresh.token}/unlock`, { password: 'correct-horse' })).status, 200); // other links unaffected
+    });
+
+    // Protected links work for visitors who are not signed in to the site
+    await run({ SHARE_PASSWORD: 'site-pw' }, async ({ url }) => {
+        const login = await post(`${url}/login`, { password: 'site-pw' });
+        const admin = { Cookie: login.headers.get('set-cookie').split(';')[0] };
+        const share = await json(await post(`${url}/api/shares`, { path: 'docs', password: 'link-pw' }, admin));
+        const base = `${url}/s/${share.token}`;
+        assert.strictEqual((await fetch(`${base}/api/list`)).status, 401);
+        const ok = await post(`${base}/unlock`, { password: 'link-pw' });
+        assert.strictEqual(ok.status, 200);
+        assert.strictEqual((await fetch(`${base}/api/list`, { headers: { Cookie: ok.headers.get('set-cookie').split(';')[0] } })).status, 200);
+        assert.strictEqual((await fetch(`${url}/api/list`)).status, 401); // the site itself stays locked
+    });
+
     console.log('All smoke tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -12,6 +12,7 @@ const { createSharesRouter } = require('./routes/shares');
 const { createFoldersRouter } = require('./routes/folders');
 const { Thumbnails } = require('./services/thumbnails');
 const { createP2PRouter } = require('./routes/p2p');
+const { createShareAccess } = require('./middleware/shareAccess');
 const { SettingsStore } = require('./services/settingsStore');
 const { createScope } = require('./lib/scope');
 const { isInside, HttpError } = require('./lib/paths');
@@ -100,6 +101,7 @@ function createApp(cfg) {
     app.use('/api', admin);
 
     // Share links (public; limited to the shared file/folder, read-only)
+    const access = createShareAccess();
     const share = express.Router({ mergeParams: true });
     share.use((req, res, next) => {
         const record = shares.get(req.params.token);
@@ -108,12 +110,15 @@ function createApp(cfg) {
         if (!record || !record.abs || !mounts.some((m) => isInside(m.path, record.abs)) || !fs.existsSync(record.abs)) {
             return next(new HttpError(404, 'This link is invalid or has expired'));
         }
+        req.shareRecord = record;
         req.scope =
             record.type === 'file'
                 ? createScope([{ name: '', path: path.dirname(record.abs) }], { only: path.basename(record.abs), token: record.token })
                 : createScope([{ name: '', path: record.abs }], { token: record.token });
         next();
     });
+    share.use(access.router); // POST /unlock
+    share.use(access.gate); // protected links need the unlock cookie from here on
     share.get('/api/me', (req, res) =>
         res.json({ mode: 'share', canUpload: false, canModify: false, canShare: false, rootName: 'Shared', local: clientIsLocal(req), thumbs: Boolean(thumbs && thumbs.ready) })
     );
