@@ -58,6 +58,7 @@ const PREVIEWABLE = new Set(['image', 'video', 'audio', 'pdf', 'text']);
 const store = {
     get: (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } },
     set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
+    del: (k) => { try { localStorage.removeItem(k); } catch { /* private mode */ } },
 };
 
 const state = {
@@ -803,6 +804,65 @@ function uploadOne(file, onProgress) {
     });
 }
 
+// Big files go in chunks: a dropped connection resumes where it stopped, even after a page reload.
+const CHUNKED_FROM = 8 * 1024 * 1024;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const resumeKey = (file) => `upload:${BASE}|${state.path}|${file.name}|${file.size}|${file.lastModified}`;
+
+function sendChunk(id, offset, blob, onProgress) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', `${BASE}/api/upload/session/${id}?offset=${offset}`);
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(offset + e.loaded);
+        xhr.onload = () => {
+            let body = {};
+            try { body = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+            if (xhr.status === 200) resolve(body.offset);
+            else reject(Object.assign(new Error(body.error || `Upload failed (${xhr.status})`), { status: xhr.status, offset: body.offset }));
+        };
+        xhr.onerror = () => reject(Object.assign(new Error('Network error'), { status: 0 }));
+        xhr.send(blob);
+    });
+}
+
+async function uploadChunked(file, onProgress) {
+    const key = resumeKey(file);
+    let session = null;
+    const remembered = store.get(key);
+    if (remembered) {
+        const res = await fetch(`${BASE}/api/upload/session/${remembered}`);
+        if (res.ok) session = { id: remembered, ...(await res.json()) };
+        else store.del(key);
+    }
+    if (!session) {
+        const res = await post('/upload/session', { path: state.path, name: file.name, size: file.size });
+        session = await res.json();
+        store.set(key, session.id);
+    }
+    let offset = session.offset;
+    let failures = 0;
+    onProgress(offset);
+    while (offset < file.size) {
+        const end = Math.min(offset + session.chunkSize, file.size);
+        try {
+            offset = await sendChunk(session.id, offset, file.slice(offset, end), onProgress);
+            failures = 0;
+        } catch (error) {
+            if (error.status === 404) { store.del(key); throw new Error('Upload expired, please try again'); }
+            if (error.status === 409 && Number.isFinite(error.offset)) { offset = error.offset; continue; } // server is ahead/behind: realign
+            if (error.status >= 400 && error.status < 500 && error.status !== 0) { store.del(key); throw error; }
+            if (++failures > 6) throw new Error('Connection lost. Upload again to resume.');
+            await wait(Math.min(1000 * 2 ** failures, 15000));
+            const res = await fetch(`${BASE}/api/upload/session/${session.id}`).catch(() => null);
+            if (res && res.ok) offset = (await res.json()).offset;
+        }
+    }
+    const done = await (await post(`/upload/session/${session.id}/finish`, {})).json();
+    store.del(key);
+    return done;
+}
+
 async function uploadFiles(files) {
     files = [...files];
     if (!files.length || !state.me.canUpload) return;
@@ -818,7 +878,7 @@ async function uploadFiles(files) {
         };
         update(0);
         try {
-            const res = await uploadOne(file, update);
+            const res = file.size > CHUNKED_FROM ? await uploadChunked(file, update) : await uploadOne(file, update);
             for (const r of res.rejected || []) toast(`${r.name}: ${r.error}`, true);
             ok += res.uploaded || 0;
         } catch (error) { toast(`${file.name}: ${error.message}`, true); }

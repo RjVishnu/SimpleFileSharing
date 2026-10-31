@@ -10,7 +10,7 @@
     "build-exe": "pkg . --target node18-win32-x64 --output ./dist/FileServer.exe",
     "build-linux": "node build-linux.js",
     "build-all": "node build-all.js",
-    "test": "node test/smoke.js && node test/thumbs.js"
+    "test": "node test/smoke.js && node test/thumbs.js && node test/resumable.js"
   },
   "pkg": {
     "scripts": [

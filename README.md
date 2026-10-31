@@ -20,7 +20,7 @@ Windows/Linux executables: `npm run build-exe` / `npm run build-linux` (uses `pk
 - Photo thumbnails in lists, grid and gallery (cached, original untouched)
 - **Send to device**: direct phone-to-computer transfer over the local network, never stored on the server
 - Multi-select → ZIP download (files and folders)
-- Upload via button or drag & drop, with progress; name conflicts become `name (1).ext`
+- Upload via button or drag & drop, with progress; name conflicts become `name (1).ext`. Files over 8 MB upload in chunks and **resume** after a dropped connection (even after a page reload: choose the same file again)
 - **Share links**: per file or folder, optional expiry and **optional link password**, QR code, download counter, revoke anytime. Links are read-only and limited to what was shared; they work without the site password
 - Optional password login, dark mode, mobile friendly
 - New folder / rename / delete (enabled when a password is set, or `ALLOW_MODIFY=true`)
@@ -90,7 +90,7 @@ server.js            entry point
 config.js            default settings
 src/config.js        merges flags / env / defaults
 src/app.js           express wiring (admin scope + share-link scope)
-src/routes/          browse, files, upload, manage, shares, folders, p2p (device-to-device signalling)
+src/routes/          browse, files, upload (+ resumable chunks), manage, shares, folders, p2p (device-to-device signalling)
 src/middleware/      auth, share-link unlock, security headers
 src/services/        share-link store, shared-folder settings store, thumbnails
 src/lib/             scope, path safety, file types, network, password hashing

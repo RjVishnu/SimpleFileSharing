@@ -4,6 +4,7 @@ const path = require('path');
 const express = require('express');
 const multer = require('multer');
 const { HttpError, validateName } = require('../lib/paths');
+const { createResumableRouter } = require('./resumable');
 
 async function exists(p) {
     try {
@@ -74,6 +75,8 @@ function createUploadRouter(cfg) {
             await Promise.all(files.map((f) => fs.unlink(f.path).catch(() => {}))); // leftovers only
         }
     });
+
+    router.use(createResumableRouter(cfg, { exists, moveFile, uniquePath }));
 
     return router;
 }
