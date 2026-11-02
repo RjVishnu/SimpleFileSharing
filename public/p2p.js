@@ -14,7 +14,8 @@
     const listeners = {};
     const emit = (name, data) => (listeners[name] || []).forEach((fn) => { try { fn(data); } catch (e) { console.error(e); } });
 
-    const state = { id: null, name: '', peers: new Map(), source: null, iceServers: null };
+    const state = { id: null, name: '', peers: new Map(), source: null, iceServers: null, sharing: '' };
+    const hooks = new Map(); // transfer id -> cancel function, for transfers handled elsewhere (folder.js)
     const sessions = new Map(); // transfer id -> session
 
     const ADJECTIVES = ['Blue', 'Green', 'Red', 'Swift', 'Calm', 'Brave', 'Quiet', 'Sunny', 'Lucky', 'Witty', 'Amber', 'Coral'];
@@ -47,7 +48,7 @@
         if (state.source) return;
         state.name = deviceName();
         const connect = () => {
-            const source = new EventSource(`${BASE}/api/p2p/events?name=${encodeURIComponent(state.name)}&kind=${deviceKind()}`);
+            const source = new EventSource(`${BASE}/api/p2p/events?name=${encodeURIComponent(state.name)}&kind=${deviceKind()}&sharing=${encodeURIComponent(state.sharing)}`);
             state.source = source;
             source.addEventListener('hello', (e) => {
                 const data = JSON.parse(e.data);
@@ -56,6 +57,7 @@
                 emit('peers', list());
             });
             source.addEventListener('peer-joined', (e) => { const p = JSON.parse(e.data); state.peers.set(p.id, p); emit('peers', list()); });
+            source.addEventListener('peer-updated', (e) => { const p = JSON.parse(e.data); state.peers.set(p.id, p); emit('peers', list()); });
             source.addEventListener('peer-left', (e) => { state.peers.delete(JSON.parse(e.data).id); emit('peers', list()); });
             source.addEventListener('signal', (e) => onSignal(JSON.parse(e.data)));
             source.onerror = () => { state.peers.clear(); emit('peers', list()); }; // EventSource reconnects by itself
@@ -238,6 +240,8 @@
 
     // ---------- incoming signalling ----------
     async function onSignal({ from, name, data }) {
+        // folder browsing has its own handshake, see folder.js
+        if (data && typeof data.k === 'string' && data.k.startsWith('b-')) return emit('bsignal', { from, name, data });
         let s = sessions.get(data.tid);
         if (data.k === 'offer') {
             if (!data.file || typeof data.file.name !== 'string' || !Number.isFinite(data.file.size) || data.file.size < 0) return;
@@ -263,6 +267,7 @@
     }
 
     function cancel(tid) {
+        if (hooks.has(tid)) return hooks.get(tid)();
         const s = sessions.get(tid);
         if (!s) return;
         signal(s.peerId, { k: 'cancel', tid }).catch(() => {});
@@ -274,6 +279,17 @@
         send,
         cancel,
         peers: list,
+        // Offer (or stop offering) a folder: other devices see it next to this device's name.
+        async setSharing(name) {
+            state.sharing = String(name || '').slice(0, 60);
+            if (!state.id) return;
+            await fetch(`${BASE}/api/p2p/profile`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Peer-Id': state.id },
+                body: JSON.stringify({ sharing: state.sharing }),
+            }).catch(() => {});
+        },
+        internals: { signal, iceServers, openSink, emit, state, hooks, drain },
         get name() { return state.name; },
         rename(name) {
             const clean = String(name || '').trim().slice(0, 40);

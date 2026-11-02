@@ -167,6 +167,11 @@ input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); c
 .p2p-device:last-child { border-bottom: 0; }
 .p2p-device .ico { font-size: 26px; }
 .p2p-device .who { flex: 1; min-width: 0; font-weight: 600; word-break: break-word; }
+.p2p-device .who small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.p2p-share { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.p2p-share p { margin: 6px 0; }
+.p2p-crumbs { margin-bottom: 6px; font-size: 13px; word-break: break-word; }
+.p2p-files { max-height: 50vh; overflow-y: auto; }
 .dialog .p2p-help { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
 
 /* floating selection bar */

@@ -45,6 +45,7 @@ Click **Send to device** to see other phones and computers that have this site o
 - Devices on the local network see each other; visitors from the internet only see others behind the same public address.
 - Both devices need to be open on the page. For a transfer that doesn't need the other person present, use a share link.
 - Across different networks the browsers usually can't reach each other directly. Set `STUN_SERVERS` (for example `stun:stun.l.google.com:19302`) to allow it; this tells that STUN server the devices' public addresses, which is why it is off by default. If the connection still fails, use a share link.
+- **Share a folder from your computer.** In the same dialog, **Choose folder…** offers a folder on your computer to everyone on the network. Their Send to device list then shows "Sharing <folder>" with a **Browse** button: they open folders and download files, straight from your browser. Nothing is uploaded to the server, and it works when the server runs elsewhere, for example in Docker. Chrome, Edge, Firefox and desktop Safari can pick a folder; it also works on plain-HTTP LAN pages. It stops when you click **Stop sharing** or close or reload the tab (browsers cannot keep a folder open after that), hidden files (names starting with a dot) are never offered, and up to 8 people can browse at once. Anyone on your network can browse it while it is on, with no password, so share only what you are happy for them to see. Downloads are one file at a time; each asks where to save on a secure page.
 - Turn it off with `ALLOW_P2P=false`.
 
 ## Same network first, internet only if needed
@@ -123,7 +124,7 @@ src/routes/          browse, files, upload (+ resumable chunks), manage, shares,
 src/middleware/      auth, share-link unlock, security headers
 src/services/        share-link store, shared-folder settings store, thumbnails
 src/lib/             scope, path safety, file types, network, password hashing
-public/              single-page UI (index.html, app.js, app.css, brand.js, p2p.js, login, unlock)
+public/              single-page UI (index.html, app.js, app.css, brand.js, p2p.js, folder.js, login, unlock)
 test/                end-to-end tests (npm test): smoke.js, thumbs.js
 docs/archive/        notes from the previous implementation
 ```

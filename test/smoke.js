@@ -334,6 +334,22 @@ const post = (url, body, headers = {}) =>
         assert.strictEqual((await signal(helloFar.id, helloA.id, { k: 'x' })).status, 403);
         assert.strictEqual((await signal(helloFar.id, helloA.id, { k: 'x' }, { 'X-Forwarded-For': '203.0.113.9' })).status, 404);
 
+        // offering a folder: shown to others, cleaned, only changeable by its own device
+        const profile = (from, body, extra = {}) => post(`${url}/api/p2p/profile`, body, { 'X-Peer-Id': from, ...extra });
+        assert.strictEqual(helloB.peers[0].sharing, ''); // not sharing by default
+        assert.strictEqual((await profile(helloB.id, { sharing: '<i>Photos</i>' })).status, 200);
+        const updated = await a.next('peer-updated');
+        assert.deepStrictEqual([updated.id, updated.sharing], [helloB.id, 'iPhotos/i']);
+        assert.strictEqual((await profile('forged-id', { sharing: 'x' })).status, 403);
+        assert.strictEqual((await profile(helloB.id, { sharing: 'x' }, { 'X-Forwarded-For': '203.0.113.9' })).status, 403); // other network
+        assert.strictEqual((await profile(helloB.id, { sharing: 'y'.repeat(200) })).status, 200);
+        assert.strictEqual((await a.next('peer-updated')).sharing.length, 60);
+        const late = await connect('name=Late&sharing=' + encodeURIComponent('Docs'));
+        assert.deepStrictEqual((await late.next('hello')).peers.map((p) => p.sharing).sort(), ['', 'y'.repeat(60)].sort());
+        assert.strictEqual((await profile(helloB.id, { sharing: '' })).status, 200);
+        assert.strictEqual((await a.next('peer-updated')).sharing, '');
+        late.close();
+
         // leaving is announced
         b.close();
         assert.strictEqual((await a.next('peer-left')).id, helloB.id);

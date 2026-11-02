@@ -738,17 +738,83 @@ function renderP2PDialog() {
         peers.length
             ? peers.map((p) => h('div', { class: 'p2p-device' },
                 h('span', { class: 'ico' }, KIND_ICON[p.kind] || '💻'),
-                h('span', { class: 'who' }, p.name),
-                btn('Send file…', () => { target = p.id; input.click(); }, 'primary')))
+                h('span', { class: 'who' }, p.name, p.sharing ? h('small', {}, `Sharing “${p.sharing}”`) : null),
+                p.sharing ? btn('Browse', () => browseDevice(p)) : null,
+                btn('Send file…', () => { target = p.id; input.click(); }, p.sharing ? '' : 'primary')))
             : h('p', {}, 'No other devices found yet. Open this site on another phone or computer on the same Wi-Fi and it will show up here.'),
         h('p', { class: 'p2p-help' }, 'Files go straight from your device to theirs. They are not uploaded to the server and use no internet data.'),
+        shareSection(),
         input);
     dialog('Send to a nearby device', body, [btn('Close', () => { p2pDialogOpen = false; closeDialog(); })]);
     p2pDialogOpen = true;
 }
 
+// Offer a folder from this computer. It stays on this computer; other devices browse it directly.
+function shareSection() {
+    if (!window.P2PFolder) return null;
+    const folder = window.P2PFolder;
+    const now = folder.info();
+    const picker = h('input', { type: 'file', hidden: true, webkitdirectory: '', multiple: true });
+    picker.onchange = () => {
+        const count = folder.share(picker.files);
+        picker.value = '';
+        if (!count) toast('That folder has no files to share', true);
+    };
+    return h('div', { class: 'p2p-share' },
+        h('div', { class: 'p2p-title' }, 'Share a folder from this computer'),
+        now.sharing
+            ? [
+                h('p', {}, `Sharing “${now.name}” (${now.files} file${now.files === 1 ? '' : 's'}). `,
+                    now.viewers.length ? `Open now: ${now.viewers.join(', ')}.` : 'Nobody is browsing it right now.'),
+                h('p', { class: 'muted' }, 'Keep this tab open: the files are sent from here. Closing or reloading it stops sharing. Hidden files (names starting with a dot) are not shared.'),
+                btn('Stop sharing', () => folder.stop()),
+            ]
+            : [
+                h('p', { class: 'muted' }, 'Pick a folder and other devices on this network can browse and download it from here. Nothing is uploaded to the server.'),
+                btn('Choose folder…', () => picker.click(), 'primary'),
+            ],
+        picker);
+}
+
+// Browse the folder another device is sharing, and download files from it.
+async function browseDevice(peer) {
+    const folder = window.P2PFolder;
+    dialog(`${peer.name}'s folder`, h('p', { class: 'muted' }, 'Connecting…'), [btn('Close', closeDialog)]);
+    let conn;
+    try {
+        conn = await folder.open(peer.id);
+    } catch (error) {
+        return dialog(`${peer.name}'s folder`, h('p', {}, error.message), [btn('Close', closeDialog)]);
+    }
+    const done = () => { folder.close(conn); closeDialog(); };
+    const show = async (path) => {
+        const body = h('div', {}, h('p', { class: 'muted' }, 'Loading…'));
+        dialog(`${peer.name}'s folder`, body, [btn('Close', done)]);
+        let items;
+        try { items = await folder.list(conn, path); } catch (error) { body.replaceChildren(h('p', {}, error.message)); return; }
+        const parts = path ? path.split('/') : [];
+        const crumbs = h('div', { class: 'p2p-crumbs' },
+            h('a', { href: '#', onclick: (e) => { e.preventDefault(); show(''); } }, peer.sharing || 'Shared folder'),
+            parts.map((part, i) => [' / ', h('a', { href: '#', onclick: (e) => { e.preventDefault(); show(parts.slice(0, i + 1).join('/')); } }, part)]).flat());
+        body.replaceChildren(crumbs, items.length
+            ? h('div', { class: 'p2p-files' }, items.map((item) => {
+                const full = path ? `${path}/${item.name}` : item.name;
+                return item.type === 'folder'
+                    ? h('div', { class: 'p2p-device' }, h('span', { class: 'ico' }, '📁'),
+                        h('a', { class: 'who', href: '#', onclick: (e) => { e.preventDefault(); show(full); } }, item.name))
+                    : h('div', { class: 'p2p-device' }, h('span', { class: 'ico' }, '📄'),
+                        h('span', { class: 'who' }, item.name, h('small', {}, formatBytes(item.size))),
+                        btn('Download', () => folder.download(conn, full, item.size, item.name)));
+            }))
+            : h('p', { class: 'muted' }, 'This folder is empty.'));
+    };
+    folder.on('closed', (e) => { if (e.bid === conn.bid && !$('dialog').hidden) toast(`${peer.name} stopped sharing`, true); });
+    show('');
+}
+
 function initP2P() {
     const P2P = window.P2P;
+    if (window.P2PFolder) window.P2PFolder.on('host', () => { if (p2pDialogOpen && !$('dialog').hidden) renderP2PDialog(); });
     $('btn-p2p').hidden = false;
     $('btn-p2p').onclick = renderP2PDialog;
     P2P.on('peers', (peers) => {

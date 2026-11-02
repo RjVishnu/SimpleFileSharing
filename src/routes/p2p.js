@@ -14,7 +14,8 @@ function createP2PRouter(cfg, { roomOf }) {
     const router = express.Router();
     const peers = new Map(); // id -> { id, name, kind, room, res }
     const inRoom = (room) => [...peers.values()].filter((p) => p.room === room);
-    const publicInfo = (p) => ({ id: p.id, name: p.name, kind: p.kind });
+    const publicInfo = (p) => ({ id: p.id, name: p.name, kind: p.kind, sharing: p.sharing });
+    const clean = (value, fallback, max) => String(value || fallback).replace(/[\u0000-\u001f<>]/g, '').slice(0, max).trim() || fallback;
     const send = (peer, event, data) => peer.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
     router.get('/p2p/config', (req, res) => {
@@ -26,11 +27,11 @@ function createP2PRouter(cfg, { roomOf }) {
         const room = roomOf(req);
         if (peers.size >= MAX_PEERS || inRoom(room).length >= MAX_PER_ROOM) return next(new HttpError(503, 'Too many connected devices'));
 
-        const clean = (value, fallback, max) => String(value || fallback).replace(/[\u0000-\u001f<>]/g, '').slice(0, max).trim() || fallback;
         const peer = {
             id: crypto.randomBytes(9).toString('base64url'),
             name: clean(req.query.name, 'Device', 40),
             kind: ['phone', 'tablet', 'laptop'].includes(req.query.kind) ? req.query.kind : 'laptop',
+            sharing: clean(req.query.sharing, '', 60), // name of the folder this device is offering, if any
             room,
             res,
         };
@@ -50,6 +51,15 @@ function createP2PRouter(cfg, { roomOf }) {
             peers.delete(peer.id);
             inRoom(room).forEach((p) => send(p, 'peer-left', { id: peer.id }));
         });
+    });
+
+    // A device starts or stops offering a folder.
+    router.post('/p2p/profile', (req, res, next) => {
+        const peer = peers.get(String(req.get('x-peer-id') || ''));
+        if (!peer || peer.room !== roomOf(req)) return next(new HttpError(403, 'Not connected'));
+        peer.sharing = clean(req.body && req.body.sharing, '', 60);
+        inRoom(peer.room).filter((p) => p !== peer).forEach((p) => send(p, 'peer-updated', publicInfo(peer)));
+        res.json({ ok: true });
     });
 
     // Relay a WebRTC offer / answer / ICE candidate / transfer request to another device in the same room.
