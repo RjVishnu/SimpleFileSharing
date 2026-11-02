@@ -21,3 +21,28 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t fileserver .
+      - name: Run the image and check it end to end
+        run: |
+          mkdir -p files && echo hello > files/hello.txt && chmod 777 files
+          docker run -d --name fs --init -p 5002:5002 -v "$PWD/files:/share" -v fsdata:/data \
+            -e SHARE_PASSWORD=secret1 -e LAN_URL=http://192.168.1.50:5002 fileserver
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' fs)" = healthy ] && break
+            sleep 2
+          done
+          docker inspect -f 'health: {{.State.Health.Status}}' fs
+          [ "$(docker inspect -f '{{.State.Health.Status}}' fs)" = healthy ]
+          curl -fsS http://localhost:5002/healthz
+          # log in, list the mounted folder, upload, create a share link built from LAN_URL
+          curl -fsS -c jar -X POST -H 'Content-Type: application/json' -d '{"password":"secret1"}' http://localhost:5002/login -o /dev/null
+          curl -fsS -b jar http://localhost:5002/api/list | grep hello.txt
+          echo data > up.txt && curl -fsS -b jar -F files=@up.txt 'http://localhost:5002/api/upload?path=' && test -f files/up.txt
+          curl -fsS -b jar -X POST -H 'Content-Type: application/json' -d '{"path":"hello.txt"}' http://localhost:5002/api/shares | grep -F 'http://192.168.1.50:5002/s/'
+          # `docker stop` must exit promptly (SIGTERM handled), not wait for the 10 s kill
+          start=$(date +%s); docker stop fs >/dev/null; [ $(( $(date +%s) - start )) -lt 8 ]

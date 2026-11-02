@@ -34,6 +34,7 @@ function createApp(cfg) {
 
     app.disable('x-powered-by');
     app.use(securityHeaders);
+    app.get('/healthz', (req, res) => res.type('text').send('ok')); // for Docker / load balancers; before auth
     app.use(express.json({ limit: '1mb' }));
     app.use(express.static(PUBLIC_DIR, { index: false }));
     app.get('/login', (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'login.html')));

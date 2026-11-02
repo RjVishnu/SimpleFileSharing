@@ -1,0 +1,23 @@
+services:
+  fileserver:
+    build: .
+    init: true                  # clean shutdown on `docker compose stop`
+    restart: unless-stopped
+    ports:
+      - "5002:5002"             # host:container
+    volumes:
+      - ./files:/share          # the folder to share (create it first; uploads are written here)
+      - fileserver-data:/data   # share links, chosen folders, thumbnail cache
+    environment:
+      # Set a password: it also enables delete/rename and the "choose folders" screen.
+      # Without one, only the host itself is trusted for those, and the container cannot tell.
+      SHARE_PASSWORD: "${SHARE_PASSWORD:-}"
+      # The address other devices on your network use to reach this host. Share links are built from it
+      # (the container only knows its own private address). Example: http://192.168.1.50:5002
+      LAN_URL: "${LAN_URL:-}"
+      # PUBLIC_URL: "https://files.example.com"
+      # MAX_UPLOAD_MB: "2048"
+      # ALLOW_SETTINGS: "true"
+
+volumes:
+  fileserver-data:

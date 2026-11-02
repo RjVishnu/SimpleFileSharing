@@ -226,6 +226,34 @@ const post = (url, body, headers = {}) =>
             assert.strictEqual((await post(`${url}/api/folders`, { path: os.tmpdir() }, viaProxy)).status, 403);
         });
 
+        // Docker: LAN_URL names the host's address; links keep the port the visitor used
+        await run({ LAN_URL: 'http://192.168.1.50:8080/' }, async ({ url, cfg }) => {
+            assert.strictEqual(cfg.lanUrl, 'http://192.168.1.50:8080');
+            const share = await json(await post(`${url}/api/shares`, { path: 'hello.txt' }));
+            assert.strictEqual(share.url, `http://192.168.1.50:8080/s/${share.token}`);
+        });
+        await run({}, async ({ url, cfg }) => {
+            assert.strictEqual(cfg.lanUrl, '');
+            const postAs = (host) => new Promise((resolve, reject) => {
+                const body = JSON.stringify({ path: 'hello.txt' });
+                const req = require('http').request(`${url}/api/shares`, { method: 'POST', headers: { Host: host, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
+                    let text = '';
+                    res.on('data', (c) => (text += c));
+                    res.on('end', () => resolve(JSON.parse(text)));
+                });
+                req.on('error', reject);
+                req.end(body);
+            });
+            const made = await postAs('localhost:9000');
+            assert(made.url.includes(':9000/s/'), made.url); // the mapped port, not the one we listen on
+            const viaName = await postAs('nas.local:9000');
+            assert(viaName.url.startsWith('http://nas.local:9000/s/'), viaName.url); // a LAN name is used as is
+            assert.strictEqual((await fetch(`${url}/healthz`)).status, 200);
+        });
+        await run({ SHARE_PASSWORD: 'secret1' }, async ({ url }) => {
+            assert.strictEqual((await fetch(`${url}/healthz`)).status, 200); // reachable without logging in
+        });
+
         await run({ PUBLIC_URL: 'ftp://nope' }, async ({ url, cfg }) => {
             assert.strictEqual(cfg.publicUrl, '');
             const share = await json(await post(`${url}/api/shares`, { path: 'hello.txt' }));

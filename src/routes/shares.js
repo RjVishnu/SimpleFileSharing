@@ -12,10 +12,19 @@ function createSharesRouter(cfg, shares) {
     // The main link is always a network address, so a transfer between two people on the same LAN
     // never touches the internet. A link made while browsing via localhost must still work for other devices.
     function lanOrigin(req) {
-        const host = req.hostname;
-        const loopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
-        const viaPublic = cfg.publicUrl && host === new URL(cfg.publicUrl).hostname;
-        return `${req.protocol}://${loopback || viaPublic ? findNetworkIP() : host}:${cfg.port}`;
+        let seen;
+        try {
+            seen = new URL(`${req.protocol}://${req.get('host')}`);
+        } catch {
+            return cfg.lanUrl || `${req.protocol}://${findNetworkIP()}:${cfg.port}`;
+        }
+        const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(seen.hostname);
+        const viaPublic = cfg.publicUrl && seen.hostname === new URL(cfg.publicUrl).hostname;
+        if (!loopback && !viaPublic) return seen.origin; // already a LAN name/address, with the port the visitor used
+        if (cfg.lanUrl) return cfg.lanUrl;
+        // The port people use may differ from the one we listen on (Docker port mapping)
+        const port = viaPublic ? cfg.port : seen.port || cfg.port;
+        return `${req.protocol}://${findNetworkIP()}:${port}`;
     }
 
     // The password hash never leaves the server.

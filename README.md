@@ -69,11 +69,40 @@ CLI flags override environment variables, which override `config.js`.
 | Blocked upload types | `BLOCKED_EXT` | `.exe,.bat,.cmd,.com,.msi,.scr,.ps1,.vbs,.dll` |
 | Max items per ZIP | `MAX_ZIP_FILES` | `500` |
 | Branding | `--brand-name`, `--brand-color`, `--brand-logo` / `BRAND_NAME`, `BRAND_COLOR` (`#rrggbb`), `BRAND_LOGO` (image path) | none |
+| This machine's LAN address (Docker) | `--lan-url` / `LAN_URL` (e.g. `http://192.168.1.50:5002`) | detected |
 | Internet address | `--public-url` / `PUBLIC_URL` (e.g. `https://files.example.com`) | none |
 | Thumbnails | `THUMBNAILS`, `THUMB_CACHE_MB` | `true`, `500` |
 | Direct transfer | `ALLOW_P2P` | `true` |
 | STUN servers (cross-network direct transfer) | `--stun` / `STUN_SERVERS` (comma-separated `stun:` URLs) | none |
 | Share-link storage | `DATA_DIR` | `./data` |
+
+## Docker
+
+```bash
+mkdir files                          # the folder to share
+docker compose up -d --build
+```
+
+Open http://localhost:5002. Put files in `./files`; uploads are written there. Settings go in a `.env` file next to `docker-compose.yml` or in the shell, for example:
+
+```bash
+SHARE_PASSWORD=choose-one
+LAN_URL=http://192.168.1.50:5002     # this machine's address on your network
+```
+
+Or without compose:
+
+```bash
+docker build -t fileserver .
+docker run -d --name fileserver --init -p 5002:5002   -v "$PWD/files:/share" -v fileserver-data:/data   -e SHARE_PASSWORD=choose-one -e LAN_URL=http://192.168.1.50:5002 fileserver
+```
+
+- **Set `LAN_URL`.** Inside a container the server only sees its own private address (like 172.17.0.2), which other devices cannot reach. `LAN_URL` is the address people on your network use (this machine's IP and the published port); share links are built from it. If you open the app through the machine's real address instead of `localhost`, links use that address and port automatically.
+- **Set `SHARE_PASSWORD`.** Without one, deleting, renaming and choosing folders are only allowed from the host itself, and a container cannot tell the host apart from other devices, so they stay off. A password turns them on. Alternatively set `ALLOW_SETTINGS=true` on a network you trust.
+- Two volumes: `/share` is the shared folder and `/data` holds share links, your folder choices and the thumbnail cache. Keep `/data` as a volume so links survive updates. To share more than one folder, mount each one (for example `-v /mnt/photos:/share/photos` or `-v /mnt/photos:/photos`) and pick them in the app.
+- The container runs as the unprivileged `node` user (uid 1000). If uploads fail with "permission denied", make the shared folder writable for that user, or add `user: "1000:1000"` (or your own uid) to the compose service.
+- Thumbnails work in the image. Direct device-to-device sending works on the same network; it does not pass through the container's files.
+- Behind a reverse proxy (nginx, Caddy, Traefik) forward the `X-Forwarded-For` header and set `PUBLIC_URL`. A health check is built in (`/healthz`).
 
 ## Security notes
 

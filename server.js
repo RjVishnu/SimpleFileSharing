@@ -6,7 +6,8 @@ const cfg = load();
 const server = createApp(cfg).listen(cfg.port, cfg.host, () => {
     console.log(`🚀 File Server running`);
     console.log(`   Local:   http://localhost:${cfg.port}`);
-    console.log(`   Network: http://${findNetworkIP()}:${cfg.port}   (same Wi-Fi / LAN: no internet data used)`);
+    const lan = cfg.lanUrl || `http://${findNetworkIP()}:${cfg.port}`;
+    console.log(`   Network: ${lan}   (same Wi-Fi / LAN: no internet data used)`);
     if (cfg.publicUrl) console.log(`   Internet: ${cfg.publicUrl}`);
     console.log(`📁 Serving: ${cfg.root}`);
     console.log(
@@ -20,8 +21,11 @@ server.on('error', (error) => {
     process.exit(1);
 });
 
-process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down...');
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000).unref();
-});
+// SIGTERM is what `docker stop` sends
+for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => {
+        console.log('\n🛑 Shutting down...');
+        server.close(() => process.exit(0));
+        setTimeout(() => process.exit(0), 2000).unref();
+    });
+}

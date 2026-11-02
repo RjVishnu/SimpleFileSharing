@@ -26,16 +26,17 @@ function loadBrand(args, env) {
     };
 }
 
-// Optional address people outside the network use (port-forward, reverse proxy or tunnel). Must be http(s).
-function loadPublicUrl(args, env) {
-    const raw = String(args['public-url'] || env.PUBLIC_URL || '').trim();
+// Optional address people use to reach this server (port-forward, reverse proxy, tunnel, or the Docker host's
+// address). Must be http(s).
+function loadOrigin(raw, name) {
+    raw = String(raw || '').trim();
     if (!raw) return '';
     try {
         const url = new URL(raw);
         if (!/^https?:$/.test(url.protocol)) throw new Error('not http(s)');
         return url.origin + url.pathname.replace(/\/+$/, '');
     } catch {
-        console.warn(`Ignoring invalid PUBLIC_URL "${raw}" (expected e.g. https://files.example.com)`);
+        console.warn(`Ignoring invalid ${name} "${raw}" (expected e.g. https://files.example.com)`);
         return '';
     }
 }
@@ -69,7 +70,10 @@ function load(argv = process.argv.slice(2), env = process.env) {
             .map((e) => e.trim().toLowerCase())
             .filter(Boolean),
         brand: loadBrand(args, env),
-        publicUrl: loadPublicUrl(args, env),
+        publicUrl: loadOrigin(args['public-url'] || env.PUBLIC_URL, 'PUBLIC_URL'),
+        // Address of this machine on the local network. Needed in Docker, where the container only sees its own
+        // private address, e.g. http://192.168.1.50:8080
+        lanUrl: loadOrigin(args['lan-url'] || env.LAN_URL, 'LAN_URL'),
         thumbnails: truthy(args.thumbnails ?? env.THUMBNAILS, true),
         thumbCacheBytes: Number(env.THUMB_CACHE_MB || 500) * 1024 * 1024,
         allowP2P: truthy(args['allow-p2p'] ?? env.ALLOW_P2P, true),
